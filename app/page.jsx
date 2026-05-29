@@ -740,30 +740,49 @@ export default function Home() {
     setTimeout(cargarWellness, 1000);
   }
 
-  async function guardarAsistencia(event) {
-    event.preventDefault();
+async function guardarAsistenciaRapida(estado) {
+  const grupo = grupos.find(g => String(g.id) === String(grupoJugador));
 
-    const form = new FormData(event.target);
-    const grupo = grupos.find(g => String(g.id) === String(grupoJugador));
+  if (!grupo) return alert('Primero elegí tu grupo');
+  if (!jugadorSeleccionado) return alert('Primero elegí tu nombre');
 
-    if (!grupo) return alert('Elegí tu grupo');
-    if (!jugadorSeleccionado) return alert('Elegí un jugador/a');
+  await enviar({
+    action: 'guardarAsistencia',
+    rama: grupo.rama,
+    tira: grupo.tira,
+    categoria: grupo.categoria,
+    jugador: jugadorSeleccionado,
+    estado,
+    observaciones: '',
+  });
 
-    await enviar({
-      action: 'guardarAsistencia',
-      rama: grupo.rama,
-      tira: grupo.tira,
-      categoria: grupo.categoria,
-      jugador: jugadorSeleccionado,
-      estado: form.get('estado'),
-      observaciones: form.get('observaciones'),
-    });
+  alert('Asistencia registrada');
+  setTimeout(cargarAsistencia, 1000);
+}
 
-    alert('Asistencia guardada correctamente');
-    event.target.reset();
-    setJugadorSeleccionado('');
-    setTimeout(cargarAsistencia, 1000);
-  }
+async function guardarAsistencia(event) {
+  event.preventDefault();
+
+  const form = new FormData(event.target);
+  const grupo = grupos.find(g => String(g.id) === String(grupoJugador));
+
+  if (!grupo) return alert('Elegí tu grupo');
+  if (!jugadorSeleccionado) return alert('Elegí un jugador/a');
+
+  await enviar({
+    action: 'guardarAsistencia',
+    rama: grupo.rama,
+    tira: grupo.tira,
+    categoria: grupo.categoria,
+    jugador: jugadorSeleccionado,
+    estado: form.get('estado'),
+    observaciones: form.get('observaciones'),
+  });
+
+  alert('Asistencia guardada correctamente');
+  event.target.reset();
+  setTimeout(cargarAsistencia, 1000);
+}
 
   const grupoActualJugador = grupos.find(g => String(g.id) === String(grupoJugador));
 
@@ -2319,7 +2338,47 @@ export default function Home() {
                 </div>
               </div>
             </section>
+<section className="premium-card border border-lime-400/30">
+  <h2 className="section-title">✅ Confirmar asistencia de hoy</h2>
 
+  <p className="text-zinc-400 mt-2">
+    Marcá tu disponibilidad para el entrenamiento.
+  </p>
+
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+    <button
+      type="button"
+      onClick={() => guardarAsistenciaRapida('PRESENTE')}
+      className="rounded-2xl bg-lime-400 text-black px-4 py-4 font-black"
+    >
+      ✅ Presente
+    </button>
+
+    <button
+      type="button"
+      onClick={() => guardarAsistenciaRapida('AUSENTE')}
+      className="rounded-2xl bg-red-500 text-white px-4 py-4 font-black"
+    >
+      ❌ Ausente
+    </button>
+
+    <button
+      type="button"
+      onClick={() => guardarAsistenciaRapida('ADAPTADO')}
+      className="rounded-2xl bg-yellow-400 text-black px-4 py-4 font-black"
+    >
+      🟡 Adaptado
+    </button>
+
+    <button
+      type="button"
+      onClick={() => guardarAsistenciaRapida('LESIONADO')}
+      className="rounded-2xl bg-purple-500 text-white px-4 py-4 font-black"
+    >
+      🔴 Lesionado
+    </button>
+  </div>
+</section>
             <section className="premium-card">
               <h2 className="section-title">Wellness diario</h2>
               <form onSubmit={guardarWellness} className="mt-4 space-y-3">
@@ -2352,34 +2411,7 @@ export default function Home() {
               </form>
             </section>
 
-            <section className="premium-card">
-              <h2 className="section-title">Asistencia</h2>
-              <form onSubmit={guardarAsistencia} className="mt-4 space-y-3">
-                <select
-                  value={jugadorSeleccionado}
-                  onChange={(e) => setJugadorSeleccionado(e.target.value)}
-                  className="input"
-                  required
-                >
-                  <option value="">Elegir jugador/a</option>
-                  {jugadoresDelGrupo.map((j) => (
-                    <option key={j.id} value={j.nombreCompleto}>
-                      {j.nombreCompleto}
-                    </option>
-                  ))}
-                </select>
 
-                <select name="estado" className="input" required>
-                  <option value="">Estado</option>
-                  <option value="PRESENTE">Presente</option>
-                  <option value="AUSENTE">Ausente</option>
-                  <option value="LESIONADO">Lesionado</option>
-                  <option value="ADAPTADO">Adaptado</option>
-                </select>
-                <textarea name="observaciones" placeholder="Observaciones" className="input min-h-24" />
-                <button className="btn-white">Guardar asistencia</button>
-              </form>
-            </section>
 
             {jugadorSeleccionado && (
               <section className="premium-card lg:col-span-2">
