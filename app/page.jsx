@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbzbDuVT2zeGwzZlF3j1399q52vdrDXThYALNMOO1r8Ae_Lx-XNhm7Pew2xfHCwEaMCMrQ/exec';
+  'https://script.google.com/macros/s/AKfycbzBOBucNMFDuDRJp3KlLTKsqIIJHt8psEJy8wg2r4uLu0dOb_npL6Kj6v3v1j6HO7iMXA/exec';
 
 export default function Home() {
   const [usuario, setUsuario] = useState(null);
@@ -53,6 +53,13 @@ export default function Home() {
   const [wellness, setWellness] = useState([]);
   const [asistencia, setAsistencia] = useState([]);
   const [historialFisico, setHistorialFisico] = useState([]);
+  const [sesionesEntrenamiento, setSesionesEntrenamiento] = useState([]);
+  const [sesionActiva, setSesionActiva] = useState(null);
+  const [ejercicioActualIndex, setEjercicioActualIndex] = useState(0);
+  const [respuestasSesion, setRespuestasSesion] = useState([]);
+  const [duracionSesion, setDuracionSesion] = useState('75');
+  const [rpeSesion, setRpeSesion] = useState('7');
+  const [obsSesion, setObsSesion] = useState('');
   const [medicionForm, setMedicionForm] = useState({
     fecha: new Date().toISOString().slice(0, 10),
     altura: '',
@@ -99,6 +106,7 @@ export default function Home() {
   const [dolorMuscular, setDolorMuscular] = useState(5);
   const [estres, setEstres] = useState(5);
   const [motivacion, setMotivacion] = useState(5);
+  const [feedbackMensaje, setFeedbackMensaje] = useState('');
 
   useEffect(() => {
     const sesionGuardada = localStorage.getItem('ferroUsuario');
@@ -176,6 +184,7 @@ export default function Home() {
     cargarPlanificacion();
     cargarPerfilesJugadores();
     cargarHistorialFisico();
+    cargarSesionesEntrenamiento();
     cargarConfigApp();
     cargarWellness();
     cargarAsistencia();
@@ -227,6 +236,12 @@ export default function Home() {
     const res = await fetch(`${API_URL}?action=listarHistorialFisico`);
     const data = await res.json();
     if (data.ok) setHistorialFisico(data.historial || []);
+  }
+
+  async function cargarSesionesEntrenamiento() {
+    const res = await fetch(`${API_URL}?action=listarSesionesEntrenamiento`);
+    const data = await res.json();
+    if (data.ok) setSesionesEntrenamiento(data.sesiones || []);
   }
 
   async function cargarConfigApp() {
@@ -711,6 +726,112 @@ export default function Home() {
     ]);
   }
 
+
+  function mostrarFeedback(mensaje) {
+    setFeedbackMensaje(mensaje);
+    setTimeout(() => setFeedbackMensaje(''), 2500);
+  }
+
+  async function guardarAsistenciaRapida(estado) {
+    const grupo = grupos.find(g => String(g.id) === String(grupoJugador));
+
+    if (!grupo) return alert('Primero elegí tu grupo');
+    if (!jugadorSeleccionado) return alert('Primero elegí tu nombre');
+
+    await enviar({
+      action: 'guardarAsistencia',
+      rama: grupo.rama,
+      tira: grupo.tira,
+      categoria: grupo.categoria,
+      jugador: jugadorSeleccionado,
+      estado,
+      observaciones: '',
+    });
+
+    mostrarFeedback(`Asistencia registrada: ${estado}`);
+    setTimeout(cargarAsistencia, 1000);
+  }
+
+
+  async function iniciarSesionEntrenamiento(rutina) {
+    if (!jugadorSeleccionado) {
+      return alert('Elegí tu jugador/a antes de comenzar');
+    }
+
+    const res = await fetch(`${API_URL}?action=listarDetalleRutina&idRutina=${rutina.idRutina}`);
+    const data = await res.json();
+    const detalle = data.ok ? data.detalle || [] : [];
+
+    if (detalle.length === 0) {
+      return alert('Esta rutina no tiene ejercicios cargados');
+    }
+
+    setRutinaAbierta(rutina);
+    setDetalleRutina(detalle);
+    setSesionActiva(rutina);
+    setEjercicioActualIndex(0);
+    setDuracionSesion('75');
+    setRpeSesion('7');
+    setObsSesion('');
+    setRespuestasSesion(detalle.map((e) => ({
+      idDetalle: e.idDetalle,
+      ejercicio: e.ejercicio,
+      bloque: e.bloque,
+      seriesObjetivo: e.series,
+      repsObjetivo: e.reps,
+      kgSugerido: e.kgSugerido,
+      rpeObjetivo: e.rpe,
+      kgReal: '',
+      repsReal: '',
+      rpeReal: '',
+      completado: false,
+      observaciones: '',
+    })));
+  }
+
+  function actualizarRespuestaSesion(index, campo, valor) {
+    setRespuestasSesion((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, [campo]: valor } : item
+      )
+    );
+  }
+
+  function marcarEjercicioActualCompletado() {
+    actualizarRespuestaSesion(ejercicioActualIndex, 'completado', true);
+  }
+
+  async function guardarSesionEntrenamiento() {
+    if (!sesionActiva) return alert('No hay una sesión activa');
+    if (!jugadorSeleccionado) return alert('Elegí un jugador/a');
+
+    const grupo = grupos.find(g => String(g.id) === String(grupoJugador));
+    if (!grupo) return alert('Elegí tu grupo');
+
+    await enviar({
+      action: 'guardarSesionEntrenamiento',
+      fecha: new Date().toISOString(),
+      jugador: jugadorSeleccionado,
+      rama: grupo.rama,
+      tira: grupo.tira,
+      categoria: grupo.categoria,
+      idRutina: sesionActiva.idRutina,
+      nombreRutina: sesionActiva.nombreRutina,
+      duracionMin: duracionSesion,
+      rpeSesion,
+      readiness: readinessScore,
+      ejercicios: respuestasSesion,
+      observaciones: obsSesion,
+    });
+
+    alert('Sesión de entrenamiento guardada correctamente');
+    setSesionActiva(null);
+    setEjercicioActualIndex(0);
+    setRespuestasSesion([]);
+    setObsSesion('');
+    setTimeout(cargarSesionesEntrenamiento, 1000);
+  }
+
   async function guardarWellness(event) {
     event.preventDefault();
 
@@ -734,55 +855,34 @@ export default function Home() {
       comentarios: form.get('comentarios'),
     });
 
-    alert('Wellness guardado correctamente');
+    mostrarFeedback('Wellness guardado correctamente');
     event.target.reset();
-    setJugadorSeleccionado('');
     setTimeout(cargarWellness, 1000);
   }
 
-async function guardarAsistenciaRapida(estado) {
-  const grupo = grupos.find(g => String(g.id) === String(grupoJugador));
+  async function guardarAsistencia(event) {
+    event.preventDefault();
 
-  if (!grupo) return alert('Primero elegí tu grupo');
-  if (!jugadorSeleccionado) return alert('Primero elegí tu nombre');
+    const form = new FormData(event.target);
+    const grupo = grupos.find(g => String(g.id) === String(grupoJugador));
 
-  await enviar({
-    action: 'guardarAsistencia',
-    rama: grupo.rama,
-    tira: grupo.tira,
-    categoria: grupo.categoria,
-    jugador: jugadorSeleccionado,
-    estado,
-    observaciones: '',
-  });
+    if (!grupo) return alert('Elegí tu grupo');
+    if (!jugadorSeleccionado) return alert('Elegí un jugador/a');
 
-  alert('Asistencia registrada');
-  setTimeout(cargarAsistencia, 1000);
-}
+    await enviar({
+      action: 'guardarAsistencia',
+      rama: grupo.rama,
+      tira: grupo.tira,
+      categoria: grupo.categoria,
+      jugador: jugadorSeleccionado,
+      estado: form.get('estado'),
+      observaciones: form.get('observaciones'),
+    });
 
-async function guardarAsistencia(event) {
-  event.preventDefault();
-
-  const form = new FormData(event.target);
-  const grupo = grupos.find(g => String(g.id) === String(grupoJugador));
-
-  if (!grupo) return alert('Elegí tu grupo');
-  if (!jugadorSeleccionado) return alert('Elegí un jugador/a');
-
-  await enviar({
-    action: 'guardarAsistencia',
-    rama: grupo.rama,
-    tira: grupo.tira,
-    categoria: grupo.categoria,
-    jugador: jugadorSeleccionado,
-    estado: form.get('estado'),
-    observaciones: form.get('observaciones'),
-  });
-
-  alert('Asistencia guardada correctamente');
-  event.target.reset();
-  setTimeout(cargarAsistencia, 1000);
-}
+    mostrarFeedback('Asistencia guardada correctamente');
+    event.target.reset();
+    setTimeout(cargarAsistencia, 1000);
+  }
 
   const grupoActualJugador = grupos.find(g => String(g.id) === String(grupoJugador));
 
@@ -827,6 +927,16 @@ async function guardarAsistencia(event) {
   const alertasPersonales = wellnessJugador.filter(
     w => Number(w.fatiga) >= 8 || Number(w.dolorMuscular) >= 8 || Number(w.sueno) <= 4
   );
+
+  const sesionesJugador = sesionesEntrenamiento.filter(s => s.jugador === jugadorSeleccionado);
+  const cargaInternaJugador = sesionesJugador.reduce((acc, s) => acc + Number(s.cargaInterna || 0), 0);
+  const ultimaSesionJugador = sesionesJugador.length > 0 ? sesionesJugador[sesionesJugador.length - 1] : null;
+  const ejerciciosCompletadosSesion = respuestasSesion.filter(e => e.completado).length;
+  const progresoSesion = respuestasSesion.length > 0
+    ? Math.round((ejerciciosCompletadosSesion / respuestasSesion.length) * 100)
+    : 0;
+  const ejercicioActualSesion = respuestasSesion[ejercicioActualIndex];
+
 
   const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
@@ -2220,8 +2330,13 @@ async function guardarAsistencia(event) {
 
         {tab === 'jugador' && (
           <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <section className="premium-card">
-              <h2 className="section-title">Mi grupo</h2>
+            <section className="premium-card border border-lime-400/20">
+              <p className="text-lime-400 text-xs tracking-[0.25em] uppercase font-black">Paso 1</p>
+              <h2 className="section-title mt-1">Mi grupo</h2>
+              <p className="text-zinc-400 text-sm mt-2">
+                Primero elegí tu grupo para que aparezcan solo los jugadores y rutinas correspondientes.
+              </p>
+
               <select
                 value={grupoJugador}
                 onChange={(e) => {
@@ -2229,6 +2344,7 @@ async function guardarAsistencia(event) {
                   setJugadorSeleccionado('');
                   setRutinaAbierta(null);
                   setDetalleRutina([]);
+                  setSesionActiva(null);
                 }}
                 className="input mt-4"
               >
@@ -2239,163 +2355,83 @@ async function guardarAsistencia(event) {
                   </option>
                 ))}
               </select>
+            </section>
 
-              {perfilJugadorSeleccionado && (
-                <div className="mt-5 rounded-3xl bg-zinc-900 p-4 border border-white/5">
-                  <div className="flex gap-4 items-center">
-                    {perfilJugadorSeleccionado.fotoUrl && (
-                      <img
-                        src={perfilJugadorSeleccionado.fotoUrl}
-                        alt={jugadorSeleccionado}
-                        className="h-20 w-20 rounded-3xl object-cover bg-white"
-                      />
-                    )}
-                    <div>
-                      <h3 className="font-black text-xl">Perfil físico</h3>
-                      <p className="text-sm text-zinc-400">{jugadorSeleccionado}</p>
-                    </div>
-                  </div>
+            <section className="premium-card border border-lime-400/30">
+              <p className="text-lime-400 text-xs tracking-[0.25em] uppercase font-black">Paso 2</p>
+              <h2 className="section-title mt-1">👤 Elegí tu nombre</h2>
+              <p className="text-zinc-400 text-sm mt-2">
+                Todos entran con la misma cuenta de jugadores. Seleccioná quién sos antes de cargar asistencia, wellness o entrenamiento.
+              </p>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm">
-                    <div><p className="text-zinc-500">Altura</p><p className="font-black">{perfilJugadorSeleccionado.alturaCm || perfilJugadorSeleccionado.altura || '-'} cm</p></div>
-                    <div><p className="text-zinc-500">Peso</p><p className="font-black">{perfilJugadorSeleccionado.pesoKg || perfilJugadorSeleccionado.peso || '-'} kg</p></div>
-                    <div><p className="text-zinc-500">Alcance parado</p><p className="font-black">{perfilJugadorSeleccionado.alcanceParadoCm || perfilJugadorSeleccionado.alcanceParado || '-'} cm</p></div>
-                    <div><p className="text-zinc-500">Alcance salto</p><p className="font-black">{perfilJugadorSeleccionado.alcanceSaltoCm || perfilJugadorSeleccionado.alcanceSalto || '-'} cm</p></div>
-                    <div><p className="text-zinc-500">Salto</p><p className="font-black">{perfilJugadorSeleccionado.saltoCm || perfilJugadorSeleccionado.salto || '-'} cm</p></div>
-                    <div><p className="text-zinc-500">Abalakov</p><p className="font-black">{perfilJugadorSeleccionado.saltoAbalakovCm || '-'} cm</p></div>
-                    <div><p className="text-zinc-500">Mano</p><p className="font-black">{perfilJugadorSeleccionado.manoDominante || '-'}</p></div>
-                  </div>
+              <select
+                value={jugadorSeleccionado}
+                onChange={(e) => {
+                  setJugadorSeleccionado(e.target.value);
+                  setRutinaAbierta(null);
+                  setSesionActiva(null);
+                }}
+                className="input mt-4"
+                disabled={!grupoJugador}
+              >
+                <option value="">{grupoJugador ? 'Elegir jugador/a' : 'Primero elegí tu grupo'}</option>
+                {jugadoresDelGrupo.map((j) => (
+                  <option key={j.id} value={j.nombreCompleto}>
+                    {j.nombreCompleto}
+                  </option>
+                ))}
+              </select>
 
-                  {perfilJugadorSeleccionado.observaciones && (
-                    <p className="text-sm text-zinc-300 mt-4">{perfilJugadorSeleccionado.observaciones}</p>
-                  )}
+              {jugadorSeleccionado && (
+                <div className="mt-5 rounded-3xl bg-lime-400/10 border border-lime-400/20 p-4">
+                  <p className="text-xs uppercase tracking-widest text-lime-400 font-black">
+                    Sesión iniciada como
+                  </p>
+                  <p className="text-2xl font-black mt-1">{jugadorSeleccionado}</p>
+                  <p className="text-sm text-zinc-400 mt-1">
+                    {grupoActualJugador?.rama} · {grupoActualJugador?.tira} · {grupoActualJugador?.categoria}
+                  </p>
                 </div>
               )}
 
-              <div className="mt-6">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                  <div>
-                    <h3 className="font-black text-xl">Rutinas de la semana</h3>
-                    <p className="text-zinc-400 text-sm mt-1">
-                      Podés abrir rutinas de toda la semana, no solo las del día.
-                    </p>
-                  </div>
-
-                  <select
-                    value={filtroSemana}
-                    onChange={(e) => setFiltroSemana(e.target.value)}
-                    className="input md:max-w-xs"
-                  >
-                    <option>Semana 1</option>
-                    <option>Semana 2</option>
-                    <option>Semana 3</option>
-                    <option>Semana 4</option>
-                    <option>Semana 5</option>
-                    <option>Semana 6</option>
-                    <option>Semana 7</option>
-                    <option>Semana 8</option>
-                  </select>
+              {feedbackMensaje && (
+                <div className="mt-4 rounded-2xl bg-lime-400 text-black p-3 font-black">
+                  ✅ {feedbackMensaje}
                 </div>
+              )}
+            </section>
 
-                <div className="mt-3 space-y-3">
-                  {grupoJugador && planificacionJugadorSemana.length === 0 && (
-                    <div className="rounded-2xl bg-zinc-800 p-4 text-zinc-400">
-                      Todavía no hay rutinas planificadas para este grupo en esta semana.
-                    </div>
-                  )}
+            <section className="premium-card border border-lime-400/30">
+              <p className="text-lime-400 text-xs tracking-[0.25em] uppercase font-black">Paso 3</p>
+              <h2 className="section-title mt-1">✅ Confirmar asistencia</h2>
+              <p className="text-zinc-400 text-sm mt-2">
+                Marcá tu disponibilidad para el entrenamiento de hoy.
+              </p>
 
-                  {planificacionJugadorSemana.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => {
-                        const rutina = rutinas.find(r => String(r.idRutina) === String(p.idRutina));
-                        if (rutina) abrirRutina(rutina);
-                      }}
-                      className="routine-card"
-                    >
-                      <p className="font-black text-lime-400">{p.nombreRutina}</p>
-                      <p className="text-sm text-zinc-300">{p.semana} · {p.dia}</p>
-                      <p className="text-sm text-zinc-400">
-                        {p.fecha ? fechaISO(p.fecha) : 'Sin fecha exacta'}
-                      </p>
-                    </button>
-                  ))}
-
-                  {grupoJugador && planificacionJugadorSemana.length === 0 && rutinasJugador.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-zinc-400 text-sm mb-2">
-                        Rutinas cargadas para el grupo, todavía sin planificación semanal:
-                      </p>
-
-                      {rutinasJugador.map((r) => (
-                        <button key={r.idRutina} onClick={() => abrirRutina(r)} className="routine-card mb-2">
-                          <p className="font-black text-lime-400">{r.nombreRutina}</p>
-                          <p className="text-sm text-zinc-300">Semana {r.semana} · {r.dia}</p>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+                <button type="button" onClick={() => guardarAsistenciaRapida('PRESENTE')} className="rounded-2xl bg-lime-400 text-black px-4 py-4 font-black disabled:opacity-40" disabled={!jugadorSeleccionado}>
+                  ✅ Presente
+                </button>
+                <button type="button" onClick={() => guardarAsistenciaRapida('AUSENTE')} className="rounded-2xl bg-red-500 text-white px-4 py-4 font-black disabled:opacity-40" disabled={!jugadorSeleccionado}>
+                  ❌ Ausente
+                </button>
+                <button type="button" onClick={() => guardarAsistenciaRapida('ADAPTADO')} className="rounded-2xl bg-yellow-400 text-black px-4 py-4 font-black disabled:opacity-40" disabled={!jugadorSeleccionado}>
+                  🟡 Adaptado
+                </button>
+                <button type="button" onClick={() => guardarAsistenciaRapida('LESIONADO')} className="rounded-2xl bg-purple-500 text-white px-4 py-4 font-black disabled:opacity-40" disabled={!jugadorSeleccionado}>
+                  🔴 Lesionado
+                </button>
               </div>
             </section>
-<section className="premium-card border border-lime-400/30">
-  <h2 className="section-title">✅ Confirmar asistencia de hoy</h2>
 
-  <p className="text-zinc-400 mt-2">
-    Marcá tu disponibilidad para el entrenamiento.
-  </p>
-
-  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
-    <button
-      type="button"
-      onClick={() => guardarAsistenciaRapida('PRESENTE')}
-      className="rounded-2xl bg-lime-400 text-black px-4 py-4 font-black"
-    >
-      ✅ Presente
-    </button>
-
-    <button
-      type="button"
-      onClick={() => guardarAsistenciaRapida('AUSENTE')}
-      className="rounded-2xl bg-red-500 text-white px-4 py-4 font-black"
-    >
-      ❌ Ausente
-    </button>
-
-    <button
-      type="button"
-      onClick={() => guardarAsistenciaRapida('ADAPTADO')}
-      className="rounded-2xl bg-yellow-400 text-black px-4 py-4 font-black"
-    >
-      🟡 Adaptado
-    </button>
-
-    <button
-      type="button"
-      onClick={() => guardarAsistenciaRapida('LESIONADO')}
-      className="rounded-2xl bg-purple-500 text-white px-4 py-4 font-black"
-    >
-      🔴 Lesionado
-    </button>
-  </div>
-</section>
             <section className="premium-card">
-              <h2 className="section-title">Wellness diario</h2>
-              <form onSubmit={guardarWellness} className="mt-4 space-y-3">
-                <select
-                  value={jugadorSeleccionado}
-                  onChange={(e) => setJugadorSeleccionado(e.target.value)}
-                  className="input"
-                  required
-                >
-                  <option value="">Elegir jugador/a</option>
-                  {jugadoresDelGrupo.map((j) => (
-                    <option key={j.id} value={j.nombreCompleto}>
-                      {j.nombreCompleto}
-                    </option>
-                  ))}
-                </select>
+              <p className="text-lime-400 text-xs tracking-[0.25em] uppercase font-black">Paso 4</p>
+              <h2 className="section-title mt-1">❤️ Wellness diario</h2>
+              <p className="text-zinc-400 text-sm mt-2">
+                Cargá cómo llegás al entrenamiento. Esto ayuda al PF a ajustar cargas y prevenir molestias.
+              </p>
 
+              <form onSubmit={guardarWellness} className="mt-4 space-y-3">
                 <Slider label="Sueño" value={sueno} setValue={setSueno} />
                 <Slider label="Fatiga" value={fatiga} setValue={setFatiga} />
                 <Slider label="Dolor muscular" value={dolorMuscular} setValue={setDolorMuscular} />
@@ -2407,11 +2443,278 @@ async function guardarAsistencia(event) {
                   <p className="text-xs text-zinc-500 mt-1">Se calcula con sueño, fatiga, dolor, estrés y motivación.</p>
                 </div>
                 <textarea name="comentarios" placeholder="Comentarios / molestias" className="input min-h-24" />
-                <button className="btn-green">Guardar wellness</button>
+                <button className="btn-green" disabled={!jugadorSeleccionado}>
+                  Guardar wellness
+                </button>
               </form>
             </section>
 
+            {sesionActiva && ejercicioActualSesion && (
+              <section className="premium-card lg:col-span-2 border border-lime-400/30">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div>
+                    <p className="text-lime-400 text-xs tracking-[0.25em] uppercase font-black">Modo entrenamiento</p>
+                    <h2 className="section-title mt-1">{sesionActiva.nombreRutina}</h2>
+                    <p className="text-zinc-400 text-sm mt-1">{jugadorSeleccionado} · Progreso {progresoSesion}%</p>
+                  </div>
+                  <button
+                    onClick={() => setSesionActiva(null)}
+                    className="rounded-2xl bg-zinc-800 text-white px-4 py-3 font-black"
+                  >
+                    Cerrar sesión
+                  </button>
+                </div>
 
+                <div className="mt-5 h-3 rounded-full bg-zinc-800 overflow-hidden">
+                  <div className="h-full bg-lime-400" style={{ width: `${progresoSesion}%` }} />
+                </div>
+
+                <div className="mt-5 exercise-card" style={estiloBloque(ejercicioActualSesion.bloque)}>
+                  <BloqueTag bloque={ejercicioActualSesion.bloque} />
+                  <p className="text-sm text-zinc-400">Ejercicio {ejercicioActualIndex + 1} de {respuestasSesion.length}</p>
+                  <h3 className="text-2xl font-black mt-1">{ejercicioActualSesion.ejercicio}</h3>
+                  <p className="text-zinc-300 mt-2">
+                    Objetivo: {ejercicioActualSesion.seriesObjetivo || '-'} series · {ejercicioActualSesion.repsObjetivo || '-'} reps · Kg sugerido {ejercicioActualSesion.kgSugerido || '-'} · RPE {ejercicioActualSesion.rpeObjetivo || '-'}
+                  </p>
+
+                  <div className="grid md:grid-cols-3 gap-3 mt-5">
+                    <input
+                      value={ejercicioActualSesion.kgReal}
+                      onChange={(e) => actualizarRespuestaSesion(ejercicioActualIndex, 'kgReal', e.target.value)}
+                      placeholder="Kg usados"
+                      className="input-dark"
+                    />
+                    <input
+                      value={ejercicioActualSesion.repsReal}
+                      onChange={(e) => actualizarRespuestaSesion(ejercicioActualIndex, 'repsReal', e.target.value)}
+                      placeholder="Reps reales"
+                      className="input-dark"
+                    />
+                    <input
+                      value={ejercicioActualSesion.rpeReal}
+                      onChange={(e) => actualizarRespuestaSesion(ejercicioActualIndex, 'rpeReal', e.target.value)}
+                      placeholder="RPE real"
+                      className="input-dark"
+                    />
+                    <textarea
+                      value={ejercicioActualSesion.observaciones}
+                      onChange={(e) => actualizarRespuestaSesion(ejercicioActualIndex, 'observaciones', e.target.value)}
+                      placeholder="Observaciones del ejercicio"
+                      className="input-dark min-h-24 md:col-span-3"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-5">
+                    <button
+                      type="button"
+                      onClick={() => setEjercicioActualIndex(Math.max(0, ejercicioActualIndex - 1))}
+                      className="rounded-2xl bg-zinc-800 text-white px-4 py-3 font-black"
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={marcarEjercicioActualCompletado}
+                      className={`rounded-2xl px-4 py-3 font-black ${ejercicioActualSesion.completado ? 'bg-lime-400 text-black' : 'bg-white text-black'}`}
+                    >
+                      {ejercicioActualSesion.completado ? 'Completado ✓' : 'Completar'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEjercicioActualIndex(Math.min(respuestasSesion.length - 1, ejercicioActualIndex + 1))}
+                      className="rounded-2xl bg-zinc-800 text-white px-4 py-3 font-black"
+                    >
+                      Siguiente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        marcarEjercicioActualCompletado();
+                        setEjercicioActualIndex(Math.min(respuestasSesion.length - 1, ejercicioActualIndex + 1));
+                      }}
+                      className="rounded-2xl bg-lime-400 text-black px-4 py-3 font-black"
+                    >
+                      Guardar y seguir
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-3 mt-5">
+                  <div>
+                    <p className="text-sm text-zinc-400 mb-2">Duración total min</p>
+                    <input value={duracionSesion} onChange={(e) => setDuracionSesion(e.target.value)} className="input" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-zinc-400 mb-2">RPE sesión</p>
+                    <select value={rpeSesion} onChange={(e) => setRpeSesion(e.target.value)} className="input">
+                      <option value="1">1 muy liviana</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                      <option value="5">5 moderada</option>
+                      <option value="6">6</option>
+                      <option value="7">7 fuerte</option>
+                      <option value="8">8 muy fuerte</option>
+                      <option value="9">9</option>
+                      <option value="10">10 máxima</option>
+                    </select>
+                  </div>
+                  <div className="rounded-3xl bg-zinc-950/60 p-4 border border-white/5">
+                    <p className="text-sm text-zinc-400">Carga interna</p>
+                    <p className="text-3xl font-black text-lime-400 mt-1">{Number(duracionSesion || 0) * Number(rpeSesion || 0)}</p>
+                    <p className="text-xs text-zinc-500">Duración × RPE</p>
+                  </div>
+                  <textarea
+                    value={obsSesion}
+                    onChange={(e) => setObsSesion(e.target.value)}
+                    placeholder="Comentario final de la sesión"
+                    className="input min-h-24 md:col-span-3"
+                  />
+                </div>
+
+                <button onClick={guardarSesionEntrenamiento} className="btn-green mt-5">
+                  Finalizar y guardar sesión
+                </button>
+              </section>
+            )}
+
+            <section className="premium-card lg:col-span-2">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <p className="text-lime-400 text-xs tracking-[0.25em] uppercase font-black">Paso 5</p>
+                  <h2 className="section-title mt-1">🏋️ Rutinas de la semana</h2>
+                  <p className="text-zinc-400 text-sm mt-1">
+                    Abrí una rutina para verla completa o empezá el modo entrenamiento ejercicio por ejercicio.
+                  </p>
+                </div>
+
+                <select
+                  value={filtroSemana}
+                  onChange={(e) => setFiltroSemana(e.target.value)}
+                  className="input md:max-w-xs"
+                >
+                  <option>Semana 1</option>
+                  <option>Semana 2</option>
+                  <option>Semana 3</option>
+                  <option>Semana 4</option>
+                  <option>Semana 5</option>
+                  <option>Semana 6</option>
+                  <option>Semana 7</option>
+                  <option>Semana 8</option>
+                </select>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                {!grupoJugador && (
+                  <div className="rounded-2xl bg-zinc-800 p-4 text-zinc-400">
+                    Elegí tu grupo para ver las rutinas disponibles.
+                  </div>
+                )}
+
+                {grupoJugador && planificacionJugadorSemana.length === 0 && rutinasJugador.length === 0 && (
+                  <div className="rounded-2xl bg-zinc-800 p-4 text-zinc-400">
+                    Todavía no hay rutinas cargadas para este grupo.
+                  </div>
+                )}
+
+                {planificacionJugadorSemana.map((p) => {
+                  const rutina = rutinas.find(r => String(r.idRutina) === String(p.idRutina));
+                  return (
+                    <div key={p.id} className="routine-card">
+                      <p className="font-black text-lime-400">{p.nombreRutina}</p>
+                      <p className="text-sm text-zinc-300">{p.semana} · {p.dia}</p>
+                      <p className="text-sm text-zinc-400">
+                        {p.fecha ? fechaISO(p.fecha) : 'Sin fecha exacta'}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 mt-4">
+                        <button
+                          type="button"
+                          onClick={() => rutina && iniciarSesionEntrenamiento(rutina)}
+                          disabled={!jugadorSeleccionado}
+                          className="rounded-2xl bg-lime-400 text-black px-4 py-3 font-black disabled:opacity-40"
+                        >
+                          Entrenar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => rutina && abrirRutina(rutina)}
+                          className="rounded-2xl bg-white text-black px-4 py-3 font-black"
+                        >
+                          Ver rutina
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {grupoJugador && planificacionJugadorSemana.length === 0 && rutinasJugador.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-zinc-400 text-sm mb-2">
+                      Rutinas cargadas para el grupo, todavía sin planificación semanal:
+                    </p>
+
+                    {rutinasJugador.map((r) => (
+                      <div key={r.idRutina} className="routine-card mb-2">
+                        <p className="font-black text-lime-400">{r.nombreRutina}</p>
+                        <p className="text-sm text-zinc-300">Semana {r.semana} · {r.dia}</p>
+                        <div className="grid grid-cols-2 gap-2 mt-4">
+                          <button type="button" disabled={!jugadorSeleccionado} onClick={() => iniciarSesionEntrenamiento(r)} className="rounded-2xl bg-lime-400 text-black px-4 py-3 font-black disabled:opacity-40">Entrenar</button>
+                          <button type="button" onClick={() => abrirRutina(r)} className="rounded-2xl bg-white text-black px-4 py-3 font-black">Ver</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {jugadorSeleccionado && (
+              <section className="premium-card lg:col-span-2">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div>
+                    <p className="text-lime-400 text-xs tracking-[0.25em] uppercase font-black">Paso 6</p>
+                    <h2 className="section-title mt-1">📊 Perfil físico</h2>
+                    <p className="text-zinc-400 text-sm mt-1">{jugadorSeleccionado}</p>
+                  </div>
+                </div>
+
+                {perfilJugadorSeleccionado ? (
+                  <div className="mt-5 rounded-3xl bg-zinc-900 p-4 border border-white/5">
+                    <div className="flex gap-4 items-center">
+                      {perfilJugadorSeleccionado.fotoUrl && (
+                        <img
+                          src={perfilJugadorSeleccionado.fotoUrl}
+                          alt={jugadorSeleccionado}
+                          className="h-20 w-20 rounded-3xl object-cover bg-white"
+                        />
+                      )}
+                      <div>
+                        <h3 className="font-black text-xl">{jugadorSeleccionado}</h3>
+                        <p className="text-sm text-zinc-400">Datos físicos cargados por el PF</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm">
+                      {(perfilJugadorSeleccionado.alturaCm || perfilJugadorSeleccionado.altura) && <div><p className="text-zinc-500">Altura</p><p className="font-black">{perfilJugadorSeleccionado.alturaCm || perfilJugadorSeleccionado.altura} cm</p></div>}
+                      {(perfilJugadorSeleccionado.pesoKg || perfilJugadorSeleccionado.peso) && <div><p className="text-zinc-500">Peso</p><p className="font-black">{perfilJugadorSeleccionado.pesoKg || perfilJugadorSeleccionado.peso} kg</p></div>}
+                      {(perfilJugadorSeleccionado.alcanceParadoCm || perfilJugadorSeleccionado.alcanceParado) && <div><p className="text-zinc-500">Alcance parado</p><p className="font-black">{perfilJugadorSeleccionado.alcanceParadoCm || perfilJugadorSeleccionado.alcanceParado} cm</p></div>}
+                      {(perfilJugadorSeleccionado.alcanceSaltoCm || perfilJugadorSeleccionado.alcanceSalto) && <div><p className="text-zinc-500">Alcance salto</p><p className="font-black">{perfilJugadorSeleccionado.alcanceSaltoCm || perfilJugadorSeleccionado.alcanceSalto} cm</p></div>}
+                      {(perfilJugadorSeleccionado.saltoCm || perfilJugadorSeleccionado.salto) && <div><p className="text-zinc-500">Salto</p><p className="font-black">{perfilJugadorSeleccionado.saltoCm || perfilJugadorSeleccionado.salto} cm</p></div>}
+                      {perfilJugadorSeleccionado.saltoAbalakovCm && <div><p className="text-zinc-500">Abalakov</p><p className="font-black">{perfilJugadorSeleccionado.saltoAbalakovCm} cm</p></div>}
+                      {perfilJugadorSeleccionado.manoDominante && <div><p className="text-zinc-500">Mano</p><p className="font-black">{perfilJugadorSeleccionado.manoDominante}</p></div>}
+                    </div>
+
+                    {perfilJugadorSeleccionado.observaciones && (
+                      <p className="text-sm text-zinc-300 mt-4">{perfilJugadorSeleccionado.observaciones}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-2xl bg-zinc-800 p-4 text-zinc-400">
+                    Todavía no hay perfil físico cargado para este jugador/a.
+                  </div>
+                )}
+              </section>
+            )}
 
             {jugadorSeleccionado && (
               <section className="premium-card lg:col-span-2">
@@ -2432,9 +2735,23 @@ async function guardarAsistencia(event) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
                   <Stat label="Wellness" value={wellnessJugador.length} />
                   <Stat label="Asistencias" value={asistenciaJugador.length} />
+                  <Stat label="Sesiones" value={sesionesJugador.length} />
+                  <Stat label="Carga int." value={cargaInternaJugador} tone="yellow" />
                   <Stat label="Fatiga prom." value={fatigaPromedio} tone="yellow" />
                   <Stat label="Sueño prom." value={suenoPromedio} tone="blue" />
                 </div>
+
+                {ultimaSesionJugador && (
+                  <div className="premium-card mt-5">
+                    <h3 className="font-black text-xl">Última sesión registrada</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm">
+                      <div><p className="text-zinc-500">Rutina</p><p className="font-black">{ultimaSesionJugador.nombreRutina}</p></div>
+                      <div><p className="text-zinc-500">Duración</p><p className="font-black">{ultimaSesionJugador.duracionMin} min</p></div>
+                      <div><p className="text-zinc-500">RPE</p><p className="font-black">{ultimaSesionJugador.rpeSesion}/10</p></div>
+                      <div><p className="text-zinc-500">Carga</p><p className="font-black">{ultimaSesionJugador.cargaInterna}</p></div>
+                    </div>
+                  </div>
+                )}
 
                 {wellnessGrafico.length > 0 && (
                   <div className="premium-card mt-5">
@@ -2560,7 +2877,10 @@ async function guardarAsistencia(event) {
 
             {rutinaAbierta && (
               <section className="premium-card lg:col-span-2">
-                <h3 className="text-2xl font-black text-lime-400">{rutinaAbierta.nombreRutina}</h3>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <h3 className="text-2xl font-black text-lime-400">{rutinaAbierta.nombreRutina}</h3>
+                  <button onClick={() => iniciarSesionEntrenamiento(rutinaAbierta)} className="rounded-2xl bg-lime-400 text-black px-4 py-3 font-black">Comenzar entrenamiento</button>
+                </div>
                 <div className="mt-4 space-y-3">
                   {detalleRutina.map((e) => (
                     <div key={e.idDetalle} className="exercise-card" style={estiloBloque(e.bloque)}>
