@@ -2495,9 +2495,27 @@ setSegundosSesion(0);
                   </button>
                 </div>
 
-                <div className="mt-5 h-3 rounded-full bg-zinc-800 overflow-hidden">
-                  <div className="h-full bg-lime-400" style={{ width: `${progresoSesion}%` }} />
-                </div>
+                <div className="mt-5 rounded-3xl bg-zinc-950/70 border border-white/5 p-4">
+  <div className="flex items-center justify-between mb-3">
+    <div>
+      <p className="text-sm text-zinc-400">Progreso de la rutina</p>
+      <p className="text-2xl font-black text-white mt-1">
+        Ejercicio {ejercicioActualIndex + 1} de {respuestasSesion.length}
+      </p>
+    </div>
+
+    <p className="text-4xl font-black text-lime-400">
+      {progresoSesion}%
+    </p>
+  </div>
+
+  <div className="h-5 rounded-full bg-zinc-800 overflow-hidden">
+    <div
+      className="h-full bg-lime-400 transition-all duration-500"
+      style={{ width: `${progresoSesion}%` }}
+    />
+  </div>
+</div>
 
                 <div className="mt-5 exercise-card" style={estiloBloque(ejercicioActualSesion.bloque)}>
                   <BloqueTag bloque={ejercicioActualSesion.bloque} />
@@ -2747,7 +2765,7 @@ setSegundosSesion(0);
               </section>
             )}
 
-            {jugadorSeleccionado && (
+            {esPF && jugadorSeleccionado && (
               <section className="premium-card lg:col-span-2">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <div>
