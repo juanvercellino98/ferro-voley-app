@@ -949,6 +949,36 @@ setObsSesion('');
   const sesionesJugador = sesionesEntrenamiento.filter(s => s.jugador === jugadorSeleccionado);
   const cargaInternaJugador = sesionesJugador.reduce((acc, s) => acc + Number(s.cargaInterna || 0), 0);
   const ultimaSesionJugador = sesionesJugador.length > 0 ? sesionesJugador[sesionesJugador.length - 1] : null;
+  const cargaPorJugador = jugadores.map((j) => {
+  const nombre = j.nombreCompleto || `${j.nombre || ''} ${j.apellido || ''}`.trim();
+
+  const sesiones = sesionesEntrenamiento.filter((s) => s.jugador === nombre);
+
+  const cargaTotal = sesiones.reduce((acc, s) => {
+    const duracion = Number(s.duracionMin || 0);
+    const rpe = Number(s.rpeSesion || 0);
+    return acc + duracion * rpe;
+  }, 0);
+
+  const ultimaSesion = sesiones.length > 0 ? sesiones[sesiones.length - 1] : null;
+
+  return {
+    jugador: nombre,
+    sesiones: sesiones.length,
+    cargaTotal,
+    rpePromedio: sesiones.length
+      ? (
+          sesiones.reduce((acc, s) => acc + Number(s.rpeSesion || 0), 0) /
+          sesiones.length
+        ).toFixed(1)
+      : '-',
+    ultimaSesion,
+  };
+}).filter(j => j.jugador);
+
+const rankingCarga = [...cargaPorJugador]
+  .sort((a, b) => b.cargaTotal - a.cargaTotal)
+  .slice(0, 8);
   const ejerciciosCompletadosSesion = respuestasSesion.filter(e => e.completado).length;
   const progresoSesion = respuestasSesion.length > 0
     ? Math.round((ejerciciosCompletadosSesion / respuestasSesion.length) * 100)
@@ -1368,6 +1398,47 @@ setObsSesion('');
                     <Stat label="Adaptados/lesionados" value={adaptados + lesionados} tone="yellow" />
                   </div>
 
+                  <div className="premium-card border border-red-500/20">
+  <div className="flex items-center justify-between gap-3">
+    <div>
+      <h3 className="font-black text-xl text-red-300">
+        ⚠️ Jugadores en riesgo
+      </h3>
+      <p className="text-sm text-zinc-400 mt-1">
+        Detectados por fatiga alta, dolor alto, poco sueño o estrés elevado.
+      </p>
+    </div>
+
+    <p className="text-3xl font-black text-red-300">
+      {alertasCriticas.length}
+    </p>
+  </div>
+
+  <div className="grid md:grid-cols-2 gap-3 mt-5">
+    {alertasCriticas.slice(0, 6).map((w) => (
+      <div
+        key={w.id}
+        className="rounded-2xl bg-red-500/10 border border-red-500/20 p-4"
+      >
+        <p className="font-black">{w.jugador}</p>
+        <p className="text-xs text-zinc-300 mt-1">
+          Sueño {w.sueno}/10 · Fatiga {w.fatiga}/10 · Dolor {w.dolorMuscular}/10 · Estrés {w.estres}/10
+        </p>
+        {w.comentarios && (
+          <p className="text-xs text-zinc-500 mt-2">
+            Obs: {w.comentarios}
+          </p>
+        )}
+      </div>
+    ))}
+
+    {alertasCriticas.length === 0 && (
+      <p className="text-sm text-zinc-500">
+        No hay jugadores en riesgo para la fecha seleccionada.
+      </p>
+    )}
+  </div>
+</div>
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     <div className="premium-card">
                       <h3 className="font-black text-red-300">Alertas críticas</h3>
@@ -1405,6 +1476,87 @@ setObsSesion('');
                     </div>
                   </div>
 
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3"></div>
+                  <div className="premium-card">
+  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div>
+      <h3 className="font-black text-xl">Dashboard de carga</h3>
+      <p className="text-sm text-zinc-400 mt-1">
+        Carga interna estimada: duración x RPE de cada sesión guardada.
+      </p>
+    </div>
+
+    <p className="text-sm text-zinc-500">
+      Top {rankingCarga.length} jugadores
+    </p>
+  </div>
+
+  <div className="mt-5 grid gap-3">
+    {rankingCarga.map((item, index) => (
+      <div
+        key={item.jugador}
+        className="rounded-2xl bg-zinc-950/70 border border-white/5 p-4"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="font-black">
+              {index + 1}. {item.jugador}
+            </p>
+            <p className="text-xs text-zinc-500 mt-1">
+              {item.sesiones} sesiones · RPE prom. {item.rpePromedio}
+            </p>
+          </div>
+
+         <div className="text-right">
+  <p className="text-2xl font-black text-lime-400">
+    {item.cargaTotal}
+  </p>
+
+  <p className={`text-xs font-black mt-1 ${
+    item.cargaTotal >= 2500
+      ? 'text-red-400'
+      : item.cargaTotal >= 1000
+        ? 'text-yellow-400'
+        : 'text-lime-400'
+  }`}>
+    {item.cargaTotal >= 2500
+      ? 'Carga alta'
+      : item.cargaTotal >= 1000
+        ? 'Carga media'
+        : 'Carga baja'}
+  </p>
+</div>
+        </div>
+
+        <div className="mt-3 h-3 rounded-full bg-zinc-800 overflow-hidden">
+          <div
+            className="h-full bg-lime-400"
+            style={{
+              width: `${Math.min(
+                100,
+                rankingCarga[0]?.cargaTotal
+                  ? (item.cargaTotal / rankingCarga[0].cargaTotal) * 100
+                  : 0
+              )}%`,
+            }}
+          />
+        </div>
+
+        {item.ultimaSesion && (
+          <p className="text-xs text-zinc-500 mt-2">
+            Última sesión: {item.ultimaSesion.nombreRutina || '-'} · RPE {item.ultimaSesion.rpeSesion || '-'}
+          </p>
+        )}
+      </div>
+    ))}
+
+    {rankingCarga.length === 0 && (
+      <p className="text-sm text-zinc-500">
+        Todavía no hay sesiones guardadas para calcular carga.
+      </p>
+    )}
+  </div>
+</div>
                   <div className="premium-card">
                     <h3 className="font-black">Planificación de {filtroSemana}</h3>
                     <p className="text-zinc-400 text-sm mt-1">
