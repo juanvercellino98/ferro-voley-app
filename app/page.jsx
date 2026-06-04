@@ -83,6 +83,7 @@ export default function Home() {
   const [rutinaPlanificacion, setRutinaPlanificacion] = useState('');
   const [filtroFecha, setFiltroFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [filtroSemana, setFiltroSemana] = useState('Semana 1');
+  const [filtroGrupoDashboard, setFiltroGrupoDashboard] = useState('');
   const [semanaDestinoCopiar, setSemanaDestinoCopiar] = useState('Semana 2');
   const [grupoJugador, setGrupoJugador] = useState('');
   const [jugadorSeleccionado, setJugadorSeleccionado] = useState('');
@@ -979,6 +980,19 @@ setObsSesion('');
 const rankingCarga = [...cargaPorJugador]
   .sort((a, b) => b.cargaTotal - a.cargaTotal)
   .slice(0, 8);
+  const topSesiones = [...cargaPorJugador]
+  .sort((a, b) => b.sesiones - a.sesiones)
+  .slice(0, 5);
+
+const cargaSemanalTotal = rankingCarga.reduce(
+  (acc, j) => acc + Number(j.cargaTotal || 0),
+  0
+);
+
+const cargaPromedioJugador =
+  rankingCarga.length > 0
+    ? Math.round(cargaSemanalTotal / rankingCarga.length)
+    : 0;
   const ejerciciosCompletadosSesion = respuestasSesion.filter(e => e.completado).length;
   const progresoSesion = respuestasSesion.length > 0
     ? Math.round((ejerciciosCompletadosSesion / respuestasSesion.length) * 100)
@@ -996,8 +1010,29 @@ const rankingCarga = [...cargaPorJugador]
     return new Date(valor).toISOString().slice(0, 10);
   }
 
-  const wellnessHoy = wellness.filter(w => fechaISO(w.fecha) === filtroFecha);
-  const asistenciaHoy = asistencia.filter(a => fechaISO(a.fecha) === filtroFecha);
+  const grupoFiltroDashboard = grupos.find(g => String(g.id) === String(filtroGrupoDashboard));
+
+const wellnessHoy = wellness.filter((w) => {
+  const coincideFecha = fechaISO(w.fecha) === filtroFecha;
+  const coincideGrupo = !grupoFiltroDashboard || (
+    w.rama === grupoFiltroDashboard.rama &&
+    w.tira === grupoFiltroDashboard.tira &&
+    w.categoria === grupoFiltroDashboard.categoria
+  );
+
+  return coincideFecha && coincideGrupo;
+});
+
+const asistenciaHoy = asistencia.filter((a) => {
+  const coincideFecha = fechaISO(a.fecha) === filtroFecha;
+  const coincideGrupo = !grupoFiltroDashboard || (
+    a.rama === grupoFiltroDashboard.rama &&
+    a.tira === grupoFiltroDashboard.tira &&
+    a.categoria === grupoFiltroDashboard.categoria
+  );
+
+  return coincideFecha && coincideGrupo;
+});
 
   const planificacionFiltrada = planificacion.filter(p =>
     String(p.semana) === String(filtroSemana)
@@ -1350,6 +1385,41 @@ const rankingCarga = [...cargaPorJugador]
                     </p>
                   </div>
 
+                  <div className="premium-card mt-4">
+  <div className="flex flex-col md:flex-row md:items-center gap-3">
+    <div className="flex-1">
+      <p className="text-sm text-zinc-400 mb-2">
+        Filtrar dashboard por grupo
+      </p>
+
+      <select
+        value={filtroGrupoDashboard}
+        onChange={(e) => setFiltroGrupoDashboard(e.target.value)}
+        className="input"
+      >
+        <option value="">Todos los grupos</option>
+
+        {grupos.map((g) => (
+          <option key={g.id} value={g.id}>
+            {g.rama} · {g.tira} · {g.categoria}
+          </option>
+        ))}
+      </select>
+    </div>
+
+    <div className="rounded-2xl bg-zinc-950/60 p-4 border border-white/5">
+      <p className="text-xs text-zinc-500">
+        Grupo seleccionado
+      </p>
+
+      <p className="font-black mt-1">
+        {grupoFiltroDashboard
+          ? `${grupoFiltroDashboard.rama} · ${grupoFiltroDashboard.tira} · ${grupoFiltroDashboard.categoria}`
+          : 'Todos'}
+      </p>
+    </div>
+  </div>
+</div>
                   <div className="premium-card">
                     <div className="grid md:grid-cols-3 gap-3">
                       <div>
@@ -1438,6 +1508,72 @@ const rankingCarga = [...cargaPorJugador]
       </p>
     )}
   </div>
+  <div className="grid lg:grid-cols-2 gap-4 mt-4">
+
+  <div className="premium-card">
+    <h3 className="font-black text-xl">
+      🏋️ Carga semanal total
+    </h3>
+
+    <p className="text-sm text-zinc-400 mt-1">
+      Suma de todas las cargas registradas.
+    </p>
+
+    <p className="text-5xl font-black text-lime-400 mt-5">
+      {cargaSemanalTotal}
+    </p>
+
+    <div className="mt-4 rounded-2xl bg-zinc-950/60 p-4 border border-white/5">
+      <p className="text-xs text-zinc-500">
+        Promedio por jugador
+      </p>
+
+      <p className="text-2xl font-black mt-1">
+        {cargaPromedioJugador}
+      </p>
+    </div>
+  </div>
+
+  <div className="premium-card">
+    <h3 className="font-black text-xl">
+      🏆 Jugadores con más sesiones
+    </h3>
+
+    <p className="text-sm text-zinc-400 mt-1">
+      Ranking de participación.
+    </p>
+
+    <div className="mt-5 space-y-3">
+      {topSesiones.map((item, index) => (
+        <div
+          key={item.jugador}
+          className="rounded-2xl bg-zinc-950/70 border border-white/5 p-3"
+        >
+          <div className="flex items-center justify-between">
+            <p className="font-black">
+              {index + 1}. {item.jugador}
+            </p>
+
+            <p className="text-lime-400 font-black">
+              {item.sesiones}
+            </p>
+          </div>
+
+          <p className="text-xs text-zinc-500 mt-1">
+            sesiones registradas
+          </p>
+        </div>
+      ))}
+
+      {topSesiones.length === 0 && (
+        <p className="text-sm text-zinc-500">
+          Todavía no hay sesiones guardadas.
+        </p>
+      )}
+    </div>
+  </div>
+
+</div>
 </div>
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     <div className="premium-card">
