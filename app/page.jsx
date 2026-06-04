@@ -832,7 +832,8 @@ setSegundosSesion(0);
       categoria: grupo.categoria,
       idRutina: sesionActiva.idRutina,
       nombreRutina: sesionActiva.nombreRutina,
-      duracionMin: duracionSesion,
+      duracionMin: Math.ceil(segundosSesion / 60),
+duracionTexto: tiempoSesion,
       rpeSesion,
       readiness: readinessScore,
       ejercicios: respuestasSesion,
@@ -950,7 +951,10 @@ setSegundosSesion(0);
   const progresoSesion = respuestasSesion.length > 0
     ? Math.round((ejerciciosCompletadosSesion / respuestasSesion.length) * 100)
     : 0;
-  const ejercicioActualSesion = respuestasSesion[ejercicioActualIndex];
+  const entrenamientoCompleto =
+  respuestasSesion.length > 0 &&
+  respuestasSesion.every((e) => e.completado);
+    const ejercicioActualSesion = respuestasSesion[ejercicioActualIndex];
 
 
   const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -2577,9 +2581,12 @@ setSegundosSesion(0);
                     <button
                       type="button"
                       onClick={() => {
-                        marcarEjercicioActualCompletado();
-                        setEjercicioActualIndex(Math.min(respuestasSesion.length - 1, ejercicioActualIndex + 1));
-                      }}
+  marcarEjercicioActualCompletado();
+
+  if (ejercicioActualIndex < respuestasSesion.length - 1) {
+    setEjercicioActualIndex(ejercicioActualIndex + 1);
+  }
+}}
                       className="rounded-2xl bg-lime-400 text-black px-4 py-3 font-black"
                     >
                       Guardar y seguir
@@ -2587,11 +2594,35 @@ setSegundosSesion(0);
                   </div>
                 </div>
 
+                {entrenamientoCompleto && (
+  <div className="mt-5 rounded-3xl bg-lime-400/10 border border-lime-400/30 p-5">
+    <p className="text-lime-400 text-xs tracking-[0.25em] uppercase font-black">
+      Entrenamiento finalizado
+    </p>
+
+    <h3 className="text-3xl font-black mt-2">
+      🏁 Rutina completa
+    </h3>
+
+    <p className="text-zinc-300 mt-2">
+      Completaste todos los ejercicios. Ahora cargá la percepción del esfuerzo y guardá la sesión.
+    </p>
+  </div>
+)}
                 <div className="grid md:grid-cols-3 gap-3 mt-5">
-                  <div>
-                    <p className="text-sm text-zinc-400 mb-2">Duración total min</p>
-                    <input value={duracionSesion} onChange={(e) => setDuracionSesion(e.target.value)} className="input" />
-                  </div>
+                <div className="rounded-3xl bg-zinc-950/70 border border-white/5 p-4">
+  <p className="text-sm text-zinc-400 mb-2">
+    Tiempo real de sesión
+  </p>
+
+  <p className="text-3xl font-black text-lime-400">
+    {tiempoSesion}
+  </p>
+
+  <p className="text-xs text-zinc-500 mt-1">
+    Se calcula automáticamente desde que comenzaste el entrenamiento.
+  </p>
+</div>
                   <div>
                     <p className="text-sm text-zinc-400 mb-2">RPE sesión</p>
                     <select value={rpeSesion} onChange={(e) => setRpeSesion(e.target.value)} className="input">
