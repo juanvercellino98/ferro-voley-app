@@ -107,6 +107,8 @@ export default function Home() {
   const [estres, setEstres] = useState(5);
   const [motivacion, setMotivacion] = useState(5);
   const [feedbackMensaje, setFeedbackMensaje] = useState('');
+  const [entrenando, setEntrenando] = useState(false);
+const [segundosSesion, setSegundosSesion] = useState(0);
 
   useEffect(() => {
     const sesionGuardada = localStorage.getItem('ferroUsuario');
@@ -122,6 +124,17 @@ export default function Home() {
 
     cargarTodo();
   }, []);
+  useEffect(() => {
+  let timer;
+
+  if (entrenando) {
+    timer = setInterval(() => {
+      setSegundosSesion((s) => s + 1);
+    }, 1000);
+  }
+
+  return () => clearInterval(timer);
+}, [entrenando]);
 
   async function ingresarJugador() {
     const usuarioJugador = {
@@ -769,6 +782,8 @@ export default function Home() {
     setRutinaAbierta(rutina);
     setDetalleRutina(detalle);
     setSesionActiva(rutina);
+    setEntrenando(true);
+setSegundosSesion(0);
     setEjercicioActualIndex(0);
     setDuracionSesion('75');
     setRpeSesion('7');
@@ -993,6 +1008,9 @@ export default function Home() {
     return coincideBloque && coincideZona && coincideMaterial;
   });
 
+  const tiempoSesion = new Date(segundosSesion * 1000)
+  .toISOString()
+  .substr(11, 8);
   const readinessScore = jugadorSeleccionado ? Math.max(0, Math.min(100, Math.round(
     (Number(sueno) * 10 * 0.25) +
     ((10 - Number(fatiga)) * 10 * 0.25) +
@@ -2449,8 +2467,20 @@ export default function Home() {
               </form>
             </section>
 
-            {sesionActiva && ejercicioActualSesion && (
-              <section className="premium-card lg:col-span-2 border border-lime-400/30">
+{sesionActiva && ejercicioActualSesion && (
+  <>
+             <div className="premium-card border border-lime-400/30 mb-4">
+  <p className="text-zinc-400 text-sm">Tiempo de sesión</p>
+
+  <p className="text-5xl font-black text-lime-400 mt-2">
+    {tiempoSesion}
+  </p>
+
+  <p className="text-sm text-zinc-500 mt-2">
+    El reloj empieza automáticamente al comenzar el entrenamiento.
+  </p>
+</div>
+             <section className="premium-card lg:col-span-2 border border-lime-400/30">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <div>
                     <p className="text-lime-400 text-xs tracking-[0.25em] uppercase font-black">Modo entrenamiento</p>
@@ -2576,7 +2606,8 @@ export default function Home() {
                   Finalizar y guardar sesión
                 </button>
               </section>
-            )}
+              </>
+)}
 
             <section className="premium-card lg:col-span-2">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
