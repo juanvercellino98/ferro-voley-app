@@ -840,11 +840,13 @@ duracionTexto: tiempoSesion,
       observaciones: obsSesion,
     });
 
-    alert('Sesión de entrenamiento guardada correctamente');
-    setSesionActiva(null);
-    setEjercicioActualIndex(0);
-    setRespuestasSesion([]);
-    setObsSesion('');
+    mostrarFeedback('Sesión de entrenamiento guardada correctamente');
+setEntrenando(false);
+setSegundosSesion(0);
+setSesionActiva(null);
+setEjercicioActualIndex(0);
+setRespuestasSesion([]);
+setObsSesion('');
     setTimeout(cargarSesionesEntrenamiento, 1000);
   }
 
@@ -2607,6 +2609,24 @@ duracionTexto: tiempoSesion,
     <p className="text-zinc-300 mt-2">
       Completaste todos los ejercicios. Ahora cargá la percepción del esfuerzo y guardá la sesión.
     </p>
+  <div className="grid grid-cols-3 gap-3 mt-5">
+  <div className="rounded-2xl bg-black/30 p-3">
+    <p className="text-xs text-zinc-500">Tiempo</p>
+    <p className="font-black text-lime-400">{tiempoSesion}</p>
+  </div>
+
+  <div className="rounded-2xl bg-black/30 p-3">
+    <p className="text-xs text-zinc-500">Ejercicios</p>
+    <p className="font-black text-lime-400">
+      {ejerciciosCompletadosSesion}/{respuestasSesion.length}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-black/30 p-3">
+    <p className="text-xs text-zinc-500">RPE</p>
+    <p className="font-black text-lime-400">{rpeSesion}/10</p>
+  </div>
+</div>
   </div>
 )}
                 <div className="grid md:grid-cols-3 gap-3 mt-5">
@@ -2623,21 +2643,32 @@ duracionTexto: tiempoSesion,
     Se calcula automáticamente desde que comenzaste el entrenamiento.
   </p>
 </div>
-                  <div>
-                    <p className="text-sm text-zinc-400 mb-2">RPE sesión</p>
-                    <select value={rpeSesion} onChange={(e) => setRpeSesion(e.target.value)} className="input">
-                      <option value="1">1 muy liviana</option>
-                      <option value="2">2</option>
-                      <option value="3">3</option>
-                      <option value="4">4</option>
-                      <option value="5">5 moderada</option>
-                      <option value="6">6</option>
-                      <option value="7">7 fuerte</option>
-                      <option value="8">8 muy fuerte</option>
-                      <option value="9">9</option>
-                      <option value="10">10 máxima</option>
-                    </select>
-                  </div>
+                  <div className="rounded-3xl bg-zinc-950/70 border border-white/5 p-4">
+  <p className="text-sm text-zinc-400 mb-3">
+    Percepción del esfuerzo
+  </p>
+
+  <div className="grid grid-cols-5 gap-2">
+    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+      <button
+        key={n}
+        type="button"
+        onClick={() => setRpeSesion(String(n))}
+        className={`rounded-2xl p-3 font-black ${
+          String(rpeSesion) === String(n)
+            ? 'bg-lime-400 text-black'
+            : 'bg-zinc-800 text-white'
+        }`}
+      >
+        {n}
+      </button>
+    ))}
+  </div>
+
+  <p className="text-xs text-zinc-500 mt-3">
+    1 = muy liviano · 10 = máximo esfuerzo
+  </p>
+</div>
                   <div className="rounded-3xl bg-zinc-950/60 p-4 border border-white/5">
                     <p className="text-sm text-zinc-400">Carga interna</p>
                     <p className="text-3xl font-black text-lime-400 mt-1">{Number(duracionSesion || 0) * Number(rpeSesion || 0)}</p>
