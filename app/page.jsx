@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbzBOBucNMFDuDRJp3KlLTKsqIIJHt8psEJy8wg2r4uLu0dOb_npL6Kj6v3v1j6HO7iMXA/exec';
+  'https://script.google.com/macros/s/AKfycbzc3cFR5-R5LEIrJbsZml5tnZFOvdMN0cwRkcOEHytMERbB9oWbG08ocYbRdKsVzTK4-w/exec';
 
 export default function Home() {
   const [usuario, setUsuario] = useState(null);
@@ -53,6 +53,7 @@ export default function Home() {
   const [wellness, setWellness] = useState([]);
   const [asistencia, setAsistencia] = useState([]);
   const [historialFisico, setHistorialFisico] = useState([]);
+  const [rmJugadores, setRmJugadores] = useState([]);
   const [sesionesEntrenamiento, setSesionesEntrenamiento] = useState([]);
   const [sesionActiva, setSesionActiva] = useState(null);
   const [ejercicioActualIndex, setEjercicioActualIndex] = useState(0);
@@ -84,6 +85,9 @@ export default function Home() {
   const [filtroFecha, setFiltroFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [filtroSemana, setFiltroSemana] = useState('Semana 1');
   const [filtroGrupoDashboard, setFiltroGrupoDashboard] = useState('');
+  const [tipoInforme, setTipoInforme] = useState('semanal');
+const [fechaDesdeInforme, setFechaDesdeInforme] = useState(() => new Date().toISOString().slice(0, 10));
+const [fechaHastaInforme, setFechaHastaInforme] = useState(() => new Date().toISOString().slice(0, 10));
   const [semanaDestinoCopiar, setSemanaDestinoCopiar] = useState('Semana 2');
   const [grupoJugador, setGrupoJugador] = useState('');
   const [jugadorSeleccionado, setJugadorSeleccionado] = useState('');
@@ -100,6 +104,12 @@ export default function Home() {
     manoDominante: '',
     observaciones: '',
   });
+  const [rmForm, setRmForm] = useState({
+  jugador: '',
+  ejercicio: '',
+  rm: '',
+  observaciones: '',
+});
   const [ejercicios, setEjercicios] = useState([]);
 
   const [sueno, setSueno] = useState(5);
@@ -202,6 +212,7 @@ const [segundosSesion, setSegundosSesion] = useState(0);
     cargarConfigApp();
     cargarWellness();
     cargarAsistencia();
+    cargarRMJugadores();
   }
 
   async function cargarGrupos() {
@@ -741,6 +752,143 @@ const [segundosSesion, setSegundosSesion] = useState(0);
   }
 
 
+  async function cargarRMJugadores() {
+  const res = await fetch(`${API_URL}?action=listarRMJugadores`);
+  const data = await res.json();
+
+  if (data.ok) {
+    setRmJugadores(data.rms || []);
+  }
+}
+
+async function guardarRMJugador() {
+  if (!rmForm.jugador) return alert('Elegí un jugador');
+  if (!rmForm.ejercicio) return alert('Elegí un ejercicio');
+  if (!rmForm.rm) return alert('Cargá el RM estimado');
+
+  await enviar({
+    action: 'guardarRMJugador',
+    jugador: rmForm.jugador,
+    ejercicio: rmForm.ejercicio,
+    rm: rmForm.rm,
+    observaciones: rmForm.observaciones,
+  });
+
+  mostrarFeedback('RM guardado correctamente');
+
+  setRmForm({
+    jugador: rmForm.jugador,
+    ejercicio: '',
+    rm: '',
+    observaciones: '',
+  });
+
+  setTimeout(cargarRMJugadores, 1000);
+}
+
+function porcentajePorReps(reps) {
+  const r = Number(reps);
+
+  if (r <= 1) return 1;
+  if (r <= 3) return 0.9;
+  if (r <= 5) return 0.85;
+  if (r <= 8) return 0.8;
+  if (r <= 10) return 0.75;
+  if (r <= 12) return 0.7;
+  return 0.65;
+}
+
+function ajustePorRPE(rpe) {
+  const r = Number(rpe);
+
+  if (!r) return 0;
+  if (r >= 10) return 0;
+  if (r === 9) return -0.03;
+  if (r === 8) return -0.06;
+  if (r === 7) return -0.09;
+  if (r === 6) return -0.12;
+  return -0.15;
+}
+
+function calcularKgSugeridoPorRM(rm, reps, rpe) {
+  if (!rm || !reps) return '';
+
+  const porcentaje = porcentajePorReps(reps);
+  const ajuste = ajustePorRPE(rpe);
+  const kg = Number(rm) * (porcentaje + ajuste);
+
+  if (!kg || kg <= 0) return '';
+
+  return Math.round(kg / 2.5) * 2.5;
+}
+function calcularSeriesSugeridasPorRM(rm, repsTexto, rpe) {
+  if (!rm || !repsTexto) return [];
+
+  const repsArray = String(repsTexto)
+    .split('-')
+    .map((r) => Number(r.trim()))
+    .filter(Boolean);
+
+  return repsArray.map((rep, index) => ({
+    serie: index + 1,
+    reps: rep,
+    kg: calcularKgSugeridoPorRM(rm, rep, rpe),
+  }));
+}
+
+function evaluarDiferenciaKg(kgReal, kgSugerido) {
+  const real = Number(kgReal);
+  const sugerido = Number(kgSugerido);
+
+  if (!real || !sugerido) {
+    return {
+      texto: 'Cargá los kg usados para comparar.',
+      estado: 'sin-datos',
+    };
+  }
+
+  const diferencia = real - sugerido;
+
+  if (Math.abs(diferencia) <= 2.5) {
+    return {
+      texto: `Dentro del rango recomendado (${diferencia > 0 ? '+' : ''}${diferencia} kg).`,
+      estado: 'ok',
+    };
+  }
+
+  if (diferencia > 2.5 && diferencia <= 7.5) {
+    return {
+      texto: `Levemente por encima: +${diferencia} kg.`,
+      estado: 'medio',
+    };
+  }
+
+  if (diferencia > 7.5) {
+    return {
+      texto: `Muy por encima: +${diferencia} kg.`,
+      estado: 'alto',
+    };
+  }
+
+  if (diferencia < -2.5 && diferencia >= -7.5) {
+    return {
+      texto: `Levemente por debajo: ${diferencia} kg.`,
+      estado: 'medio',
+    };
+  }
+
+  return {
+    texto: `Muy por debajo: ${diferencia} kg.`,
+    estado: 'alto',
+  };
+}
+
+function buscarRMJugador(jugador, ejercicio) {
+  return rmJugadores.find((item) =>
+    String(item.jugador || '').trim().toLowerCase() === String(jugador || '').trim().toLowerCase() &&
+    String(item.ejercicio || '').trim().toLowerCase() === String(ejercicio || '').trim().toLowerCase()
+  );
+}
   function mostrarFeedback(mensaje) {
     setFeedbackMensaje(mensaje);
     setTimeout(() => setFeedbackMensaje(''), 2500);
@@ -789,20 +937,21 @@ setSegundosSesion(0);
     setDuracionSesion('75');
     setRpeSesion('7');
     setObsSesion('');
-    setRespuestasSesion(detalle.map((e) => ({
-      idDetalle: e.idDetalle,
-      ejercicio: e.ejercicio,
-      bloque: e.bloque,
-      seriesObjetivo: e.series,
-      repsObjetivo: e.reps,
-      kgSugerido: e.kgSugerido,
-      rpeObjetivo: e.rpe,
-      kgReal: '',
-      repsReal: '',
-      rpeReal: '',
-      completado: false,
-      observaciones: '',
-    })));
+   setRespuestasSesion(detalle.map((e) => ({
+  idDetalle: e.idDetalle,
+  ejercicio: e.ejercicio,
+  bloque: e.bloque,
+  seriesObjetivo: e.series,
+  repsObjetivo: e.reps,
+  kgSugerido: e.kgSugerido,
+  rpeObjetivo: e.rpe,
+  videoUrl: e.videoUrl || '',
+  kgReal: '',
+  repsReal: '',
+  rpeReal: '',
+  completado: false,
+  observaciones: '',
+})));
   }
 
   function actualizarRespuestaSesion(index, campo, valor) {
@@ -1001,6 +1150,17 @@ const cargaPromedioJugador =
   respuestasSesion.length > 0 &&
   respuestasSesion.every((e) => e.completado);
     const ejercicioActualSesion = respuestasSesion[ejercicioActualIndex];
+    const rmEjercicioActual = ejercicioActualSesion
+  ? buscarRMJugador(jugadorSeleccionado, ejercicioActualSesion.ejercicio)
+  : null;
+
+const seriesSugeridasRMActual = rmEjercicioActual
+  ? calcularSeriesSugeridasPorRM(
+      rmEjercicioActual.rm,
+      ejercicioActualSesion.repsObjetivo,
+      ejercicioActualSesion.rpeObjetivo
+    )
+  : [];
 
 
   const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -1113,6 +1273,416 @@ const asistenciaHoy = asistencia.filter((a) => {
     );
   }
 
+  function exportarInformePF() {
+  const desde = new Date(fechaDesdeInforme);
+  const hasta = new Date(fechaHastaInforme);
+  hasta.setHours(23, 59, 59, 999);
+
+  const grupoTexto = grupoFiltroDashboard
+    ? `${grupoFiltroDashboard.rama} · ${grupoFiltroDashboard.tira} · ${grupoFiltroDashboard.categoria}`
+    : 'Todos los grupos';
+
+  const wellnessInforme = wellness.filter((w) => {
+    const fecha = new Date(w.fecha);
+    const coincideFecha = fecha >= desde && fecha <= hasta;
+    const coincideGrupo = !grupoFiltroDashboard || (
+      w.rama === grupoFiltroDashboard.rama &&
+      w.tira === grupoFiltroDashboard.tira &&
+      w.categoria === grupoFiltroDashboard.categoria
+    );
+
+    return coincideFecha && coincideGrupo;
+  });
+
+  const asistenciaInforme = asistencia.filter((a) => {
+    const fecha = new Date(a.fecha);
+    const coincideFecha = fecha >= desde && fecha <= hasta;
+    const coincideGrupo = !grupoFiltroDashboard || (
+      a.rama === grupoFiltroDashboard.rama &&
+      a.tira === grupoFiltroDashboard.tira &&
+      a.categoria === grupoFiltroDashboard.categoria
+    );
+
+    return coincideFecha && coincideGrupo;
+  });
+
+  const sesionesInforme = sesionesEntrenamiento.filter((s) => {
+    const fecha = new Date(s.fecha);
+    const coincideFecha = fecha >= desde && fecha <= hasta;
+    const coincideGrupo = !grupoFiltroDashboard || (
+      s.rama === grupoFiltroDashboard.rama &&
+      s.tira === grupoFiltroDashboard.tira &&
+      s.categoria === grupoFiltroDashboard.categoria
+    );
+
+    return coincideFecha && coincideGrupo;
+  });
+
+  const presentesInforme = asistenciaInforme.filter(a => a.estado === 'PRESENTE').length;
+  const ausentesInforme = asistenciaInforme.filter(a => a.estado === 'AUSENTE').length;
+  const adaptadosInforme = asistenciaInforme.filter(a => a.estado === 'ADAPTADO').length;
+  const lesionadosInforme = asistenciaInforme.filter(a => a.estado === 'LESIONADO').length;
+
+  const alertasInforme = wellnessInforme.filter(
+    w => Number(w.fatiga) >= 8 || Number(w.dolorMuscular) >= 8 || Number(w.sueno) <= 4 || Number(w.estres) >= 8
+  );
+
+  const cargaTotalInforme = sesionesInforme.reduce((acc, s) => {
+    const duracion = Number(s.duracionMin || 0);
+    const rpe = Number(s.rpeSesion || 0);
+    return acc + duracion * rpe;
+  }, 0);
+
+  const rpePromedioInforme = sesionesInforme.length
+    ? (
+        sesionesInforme.reduce((acc, s) => acc + Number(s.rpeSesion || 0), 0) /
+        sesionesInforme.length
+      ).toFixed(1)
+    : '-';
+    const promedioCampo = (lista, campo) => {
+  if (!lista.length) return 0;
+
+  return (
+    lista.reduce((acc, item) => acc + Number(item[campo] || 0), 0) /
+    lista.length
+  ).toFixed(1);
+};
+
+const metricasWellnessInforme = [
+  { label: 'Sueño', valor: Number(promedioCampo(wellnessInforme, 'sueno')) },
+  { label: 'Fatiga', valor: Number(promedioCampo(wellnessInforme, 'fatiga')) },
+  { label: 'Dolor muscular', valor: Number(promedioCampo(wellnessInforme, 'dolorMuscular')) },
+  { label: 'Estrés', valor: Number(promedioCampo(wellnessInforme, 'estres')) },
+  { label: 'Motivación', valor: Number(promedioCampo(wellnessInforme, 'motivacion')) },
+];
+
+const cargaPorJugadorInforme = Object.values(
+  sesionesInforme.reduce((acc, s) => {
+    const jugador = s.jugador || 'Sin jugador';
+    const duracion = Number(s.duracionMin || 0);
+    const rpe = Number(s.rpeSesion || 0);
+    const carga = duracion * rpe;
+
+    if (!acc[jugador]) {
+      acc[jugador] = {
+        jugador,
+        carga: 0,
+        sesiones: 0,
+      };
+    }
+
+    acc[jugador].carga += carga;
+    acc[jugador].sesiones += 1;
+
+    return acc;
+  }, {})
+).sort((a, b) => b.carga - a.carga);
+
+const maxCargaInforme =
+  cargaPorJugadorInforme.length > 0
+    ? Math.max(...cargaPorJugadorInforme.map(j => j.carga))
+    : 0;
+
+const graficoWellnessHTML = metricasWellnessInforme.map((m) => `
+  <div class="bar-row">
+    <div class="bar-label">${m.label}</div>
+    <div class="bar-track">
+      <div class="bar-fill" style="width:${Math.min(100, m.valor * 10)}%"></div>
+    </div>
+    <div class="bar-value">${m.valor}/10</div>
+  </div>
+`).join('');
+
+const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
+  <div class="bar-row">
+    <div class="bar-label">${j.jugador}</div>
+    <div class="bar-track">
+      <div class="bar-fill dark" style="width:${maxCargaInforme ? Math.min(100, (j.carga / maxCargaInforme) * 100) : 0}%"></div>
+    </div>
+    <div class="bar-value">${j.carga}</div>
+  </div>
+`).join('');
+
+  const filasAlertas = alertasInforme.map((w) => `
+    <tr>
+      <td>${w.jugador || '-'}</td>
+      <td>${w.sueno || '-'}</td>
+      <td>${w.fatiga || '-'}</td>
+      <td>${w.dolorMuscular || '-'}</td>
+      <td>${w.estres || '-'}</td>
+      <td>${w.comentarios || ''}</td>
+    </tr>
+  `).join('');
+
+  const filasSesiones = sesionesInforme.map((s) => `
+    <tr>
+      <td>${s.jugador || '-'}</td>
+      <td>${s.nombreRutina || '-'}</td>
+      <td>${s.duracionTexto || s.duracionMin || '-'}</td>
+      <td>${s.rpeSesion || '-'}</td>
+      <td>${s.observaciones || ''}</td>
+    </tr>
+  `).join('');
+
+  const ventana = window.open('', '_blank');
+
+  ventana.document.write(`
+    <html>
+      <head>
+        <title>Informe PF - Ferro Vóley</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 32px;
+            color: #111;
+          }
+
+          .header {
+            border-bottom: 4px solid #111;
+            padding-bottom: 18px;
+            margin-bottom: 24px;
+          }
+
+          h1 {
+            margin: 0;
+            font-size: 30px;
+          }
+
+          h2 {
+            margin-top: 28px;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 8px;
+          }
+
+          .meta {
+            color: #555;
+            margin-top: 8px;
+            line-height: 1.5;
+          }
+
+          .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin: 20px 0;
+          }
+
+          .card {
+            background: #f4f4f5;
+            border: 1px solid #ddd;
+            border-radius: 14px;
+            padding: 16px;
+          }
+
+          .card strong {
+            display: block;
+            font-size: 26px;
+            margin-bottom: 4px;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 13px;
+          }
+
+          th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+          }
+
+          th {
+            background: #111;
+            color: white;
+          }
+            .chart-box {
+  margin-top: 14px;
+  background: #f4f4f5;
+  border: 1px solid #ddd;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 70px;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.bar-label {
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.bar-track {
+  height: 14px;
+  background: #e4e4e7;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: #84cc16;
+  border-radius: 999px;
+}
+
+.bar-fill.dark {
+  background: #111;
+}
+
+.bar-value {
+  font-weight: bold;
+  font-size: 12px;
+  text-align: right;
+}
+
+          .footer {
+            margin-top: 32px;
+            font-size: 12px;
+            color: #666;
+          }
+
+          button {
+            padding: 12px 18px;
+            border: 0;
+            border-radius: 10px;
+            background: #84cc16;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 20px;
+          }
+
+          @media print {
+            button {
+              display: none;
+            }
+
+            body {
+              padding: 20px;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        <button onclick="window.print()">Guardar / Imprimir PDF</button>
+
+        <div class="header">
+          <h1>Informe de Preparación Física</h1>
+          <div class="meta">
+            <strong>Ferro Vóley</strong><br/>
+            Tipo de informe: ${tipoInforme}<br/>
+            Grupo: ${grupoTexto}<br/>
+            Período: ${fechaDesdeInforme} al ${fechaHastaInforme}
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card">
+            <strong>${wellnessInforme.length}</strong>
+            Wellness cargados
+          </div>
+
+          <div class="card">
+            <strong>${presentesInforme}</strong>
+            Presentes
+          </div>
+
+          <div class="card">
+            <strong>${alertasInforme.length}</strong>
+            Alertas
+          </div>
+
+          <div class="card">
+            <strong>${cargaTotalInforme}</strong>
+            Carga total
+          </div>
+
+          <div class="card">
+            <strong>${sesionesInforme.length}</strong>
+            Sesiones
+          </div>
+
+          <div class="card">
+            <strong>${rpePromedioInforme}</strong>
+            RPE promedio
+          </div>
+
+          <div class="card">
+            <strong>${adaptadosInforme}</strong>
+            Adaptados
+          </div>
+
+          <div class="card">
+            <strong>${lesionadosInforme}</strong>
+            Lesionados
+          </div>
+        </div>
+
+        <h2>Gráficos del período</h2>
+
+<h3>Promedios wellness</h3>
+<div class="chart-box">
+  ${graficoWellnessHTML || '<p>Sin datos de wellness para graficar.</p>'}
+</div>
+
+<h3>Carga por jugador</h3>
+<div class="chart-box">
+  ${graficoCargaHTML || '<p>Sin sesiones guardadas para graficar carga.</p>'}
+</div>
+        <h2>Resumen de asistencia</h2>
+        <p>
+          Presentes: ${presentesInforme} · Ausentes: ${ausentesInforme} · Adaptados: ${adaptadosInforme} · Lesionados: ${lesionadosInforme}
+        </p>
+
+        <h2>Alertas wellness</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Jugador</th>
+              <th>Sueño</th>
+              <th>Fatiga</th>
+              <th>Dolor</th>
+              <th>Estrés</th>
+              <th>Comentarios</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filasAlertas || '<tr><td colspan="6">Sin alertas en el período seleccionado.</td></tr>'}
+          </tbody>
+        </table>
+
+        <h2>Sesiones de entrenamiento</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Jugador</th>
+              <th>Rutina</th>
+              <th>Duración</th>
+              <th>RPE</th>
+              <th>Observaciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filasSesiones || '<tr><td colspan="5">Sin sesiones guardadas en el período seleccionado.</td></tr>'}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          Informe generado desde Ferro Vóley - Preparación Física App.
+        </div>
+      </body>
+    </html>
+  `);
+
+  ventana.document.close();
+}
   async function exportarRutinaPDF(rutina) {
     const res = await fetch(`${API_URL}?action=listarDetalleRutina&idRutina=${rutina.idRutina}`);
     const data = await res.json();
@@ -1146,6 +1716,49 @@ const asistenciaHoy = asistencia.filter((a) => {
             .bloque { display: inline-block; background: #111; color: white; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: bold; margin-bottom: 8px; }
             h3 { margin: 6px 0 8px; }
             p { margin: 5px 0; }
+            .chart-box {
+  margin-top: 14px;
+  background: #f4f4f5;
+  border: 1px solid #ddd;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 70px;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.bar-label {
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.bar-track {
+  height: 14px;
+  background: #e4e4e7;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: #84cc16;
+  border-radius: 999px;
+}
+
+.bar-fill.dark {
+  background: #111;
+}
+
+.bar-value {
+  font-weight: bold;
+  font-size: 12px;
+  text-align: right;
+}
             .footer { margin-top: 30px; color: #666; font-size: 12px; }
             @media print { button { display:none; } }
           </style>
@@ -1385,6 +1998,62 @@ const asistenciaHoy = asistencia.filter((a) => {
                     </p>
                   </div>
 
+                  <div className="premium-card">
+  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div>
+      <h3 className="font-black text-xl">
+        📤 Exportar informe PF
+      </h3>
+      <p className="text-sm text-zinc-400 mt-1">
+        Generá un informe imprimible/PDF con asistencia, wellness, carga, alertas y sesiones.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={exportarInformePF}
+      className="rounded-2xl bg-lime-400 text-black px-5 py-4 font-black"
+    >
+      Exportar informe
+    </button>
+  </div>
+
+  <div className="grid md:grid-cols-3 gap-3 mt-5">
+    <div>
+      <p className="text-sm text-zinc-400 mb-2">Tipo de informe</p>
+      <select
+        value={tipoInforme}
+        onChange={(e) => setTipoInforme(e.target.value)}
+        className="input"
+      >
+        <option value="diario">Diario</option>
+        <option value="semanal">Semanal</option>
+        <option value="mensual">Mensual</option>
+        <option value="personalizado">Personalizado</option>
+      </select>
+    </div>
+
+    <div>
+      <p className="text-sm text-zinc-400 mb-2">Desde</p>
+      <input
+        type="date"
+        value={fechaDesdeInforme}
+        onChange={(e) => setFechaDesdeInforme(e.target.value)}
+        className="input"
+      />
+    </div>
+
+    <div>
+      <p className="text-sm text-zinc-400 mb-2">Hasta</p>
+      <input
+        type="date"
+        value={fechaHastaInforme}
+        onChange={(e) => setFechaHastaInforme(e.target.value)}
+        className="input"
+      />
+    </div>
+  </div>
+</div>
                   <div className="premium-card mt-4">
   <div className="flex flex-col md:flex-row md:items-center gap-3">
     <div className="flex-1">
@@ -2341,6 +3010,114 @@ const asistenciaHoy = asistencia.filter((a) => {
                       className="input min-h-24 md:col-span-2"
                     />
                   </div>
+                  <div className="premium-card">
+  <h3 className="font-black text-xl">
+    🏋️ Evaluación RM por jugador
+  </h3>
+
+  <p className="text-sm text-zinc-400 mt-1">
+    Cargá el RM estimado de cada ejercicio para sugerir kg personalizados según reps y RPE.
+  </p>
+
+  <div className="grid md:grid-cols-2 gap-3 mt-5">
+    <select
+      value={rmForm.jugador}
+      onChange={(e) => setRmForm({ ...rmForm, jugador: e.target.value })}
+      className="input"
+    >
+      <option value="">Elegir jugador</option>
+      {jugadores.map((j) => (
+        <option key={j.id} value={j.nombreCompleto}>
+          {j.nombreCompleto}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={rmForm.ejercicio}
+      onChange={(e) => setRmForm({ ...rmForm, ejercicio: e.target.value })}
+      className="input"
+    >
+      <option value="">Elegir ejercicio</option>
+      {bancoEjercicios.map((e) => (
+        <option key={e.id} value={e.ejercicio}>
+          {e.ejercicio}
+        </option>
+      ))}
+    </select>
+
+    <input
+      type="number"
+      value={rmForm.rm}
+      onChange={(e) => setRmForm({ ...rmForm, rm: e.target.value })}
+      placeholder="RM estimado en kg"
+      className="input"
+    />
+
+    <input
+      value={rmForm.observaciones}
+      onChange={(e) => setRmForm({ ...rmForm, observaciones: e.target.value })}
+      placeholder="Observaciones"
+      className="input"
+    />
+  </div>
+
+  <button
+    type="button"
+    onClick={guardarRMJugador}
+    className="btn-green mt-4"
+  >
+    Guardar RM
+  </button>
+
+  {rmForm.jugador && (
+    <div className="mt-6 grid gap-3">
+      <h4 className="font-black text-lg">
+        RM cargados de {rmForm.jugador}
+      </h4>
+
+      {rmJugadores
+        .filter((item) => item.jugador === rmForm.jugador)
+        .map((item) => (
+          <div key={item.id} className="rounded-2xl bg-zinc-950/70 border border-white/5 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-black text-lime-400">
+                  {item.ejercicio}
+                </p>
+                <p className="text-sm text-zinc-400 mt-1">
+                  RM estimado: {item.rm} kg
+                </p>
+              </div>
+
+              <p className="text-2xl font-black">
+                {item.rm}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4 text-sm">
+              <p>3 reps @8: {calcularKgSugeridoPorRM(item.rm, 3, 8)} kg</p>
+              <p>5 reps @8: {calcularKgSugeridoPorRM(item.rm, 5, 8)} kg</p>
+              <p>8 reps @8: {calcularKgSugeridoPorRM(item.rm, 8, 8)} kg</p>
+              <p>10 reps @8: {calcularKgSugeridoPorRM(item.rm, 10, 8)} kg</p>
+            </div>
+
+            {item.observaciones && (
+              <p className="text-xs text-zinc-500 mt-3">
+                Obs: {item.observaciones}
+              </p>
+            )}
+          </div>
+        ))}
+
+      {rmJugadores.filter((item) => item.jugador === rmForm.jugador).length === 0 && (
+        <p className="text-sm text-zinc-500">
+          Todavía no hay RM cargados para este jugador.
+        </p>
+      )}
+    </div>
+  )}
+</div>
 
                   <button onClick={guardarPerfilJugador} className="btn-green mt-4">
                     Guardar perfil físico
@@ -2815,6 +3592,71 @@ const asistenciaHoy = asistencia.filter((a) => {
                   <BloqueTag bloque={ejercicioActualSesion.bloque} />
                   <p className="text-sm text-zinc-400">Ejercicio {ejercicioActualIndex + 1} de {respuestasSesion.length}</p>
                   <h3 className="text-2xl font-black mt-1">{ejercicioActualSesion.ejercicio}</h3>
+                  {ejercicioActualSesion.videoUrl && (
+  <div className="mt-3">
+    <a
+      href={ejercicioActualSesion.videoUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-2 rounded-2xl bg-white text-black px-4 py-3 font-black hover:opacity-90"
+    >
+      ▶️ Ver video del ejercicio
+    </a>
+  </div>
+)}
+                  {rmEjercicioActual && (
+  <div className="mt-4 rounded-2xl bg-zinc-950/70 border border-lime-400/20 p-4">
+    <p className="text-lime-400 font-black text-sm">
+      🎯 Cargas sugeridas por RM
+    </p>
+
+    <p className="text-zinc-400 text-xs mt-1">
+      RM estimado: {rmEjercicioActual.rm} kg
+    </p>
+
+    <div className="grid md:grid-cols-4 gap-2 mt-4">
+      {seriesSugeridasRMActual.map((serie) => (
+        <div
+          key={serie.serie}
+          className="rounded-xl bg-black/50 p-3 border border-white/5"
+        >
+          <p className="text-xs text-zinc-500">
+            Serie {serie.serie}
+          </p>
+
+          <p className="font-black text-white">
+            {serie.reps} reps
+          </p>
+
+          <p className="text-lime-400 font-black text-lg">
+            {serie.kg} kg
+          </p>
+          {ejercicioActualSesion.kgReal && (
+  <p className={`text-xs font-black mt-2 ${
+    evaluarDiferenciaKg(ejercicioActualSesion.kgReal, serie.kg).estado === 'ok'
+      ? 'text-lime-400'
+      : evaluarDiferenciaKg(ejercicioActualSesion.kgReal, serie.kg).estado === 'medio'
+        ? 'text-yellow-300'
+        : 'text-red-300'
+  }`}>
+    {evaluarDiferenciaKg(ejercicioActualSesion.kgReal, serie.kg).texto}
+  </p>
+)}
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+{ejercicioActualSesion.videoUrl && (
+  <a
+    href={ejercicioActualSesion.videoUrl}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="mt-4 inline-flex items-center justify-center rounded-2xl bg-white text-black px-4 py-3 font-black"
+  >
+    ▶️ Ver video del ejercicio
+  </a>
+)}
                   <p className="text-zinc-300 mt-2">
                     Objetivo: {ejercicioActualSesion.seriesObjetivo || '-'} series · {ejercicioActualSesion.repsObjetivo || '-'} reps · Kg sugerido {ejercicioActualSesion.kgSugerido || '-'} · RPE {ejercicioActualSesion.rpeObjetivo || '-'}
                   </p>
