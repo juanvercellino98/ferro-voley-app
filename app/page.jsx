@@ -12,9 +12,116 @@ import {
   ResponsiveContainer
 } from 'recharts';
 
+import {
+  DndContext,
+  closestCenter,
+  useDraggable,
+  useDroppable
+} from '@dnd-kit/core';
+
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove
+} from '@dnd-kit/sortable';
+
+import { CSS } from '@dnd-kit/utilities';
+
 const API_URL =
   'https://script.google.com/macros/s/AKfycbzc3cFR5-R5LEIrJbsZml5tnZFOvdMN0cwRkcOEHytMERbB9oWbG08ocYbRdKsVzTK4-w/exec';
 
+  function EjercicioSortable({ id, children }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div
+        {...attributes}
+        {...listeners}
+        className="mb-2 cursor-grab rounded-xl bg-zinc-800 px-3 py-2 text-sm font-black text-zinc-300 active:cursor-grabbing"
+      >
+        ☰ Mantener presionado y mover
+      </div>
+
+      {children}
+    </div>
+  );
+}
+function RutinaPlanificadaDraggable({ id, children }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id: String(id),
+  });
+
+  const style = {
+    transform: transform
+      ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+      : undefined,
+    touchAction: 'none',
+    zIndex: isDragging ? 9999 : 'auto',
+    opacity: isDragging ? 0.7 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      <div
+        {...listeners}
+        {...attributes}
+        className="mb-2 cursor-grab rounded-lg bg-zinc-800 px-2 py-1 text-[10px] font-black text-zinc-300 active:cursor-grabbing"
+      >
+        ☰ Arrastrar
+      </div>
+
+      {children}
+    </div>
+  );
+}
+
+function DiaDroppable({ id, children }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-2xl bg-zinc-900 p-3 border min-h-40 ${
+        isOver ? 'border-lime-400' : 'border-white/5'
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+function CeldaCalendarioDroppable({ id, children }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl bg-zinc-900 p-2 min-h-[120px] border ${
+        isOver ? 'border-lime-400' : 'border-white/5'
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
 export default function Home() {
   const [usuario, setUsuario] = useState(null);
   const [modoLogin, setModoLogin] = useState('');
@@ -73,8 +180,19 @@ export default function Home() {
   });
   const [detalleRutina, setDetalleRutina] = useState([]);
   const [rutinaAbierta, setRutinaAbierta] = useState(null);
+  const [planificacionAbiertaId, setPlanificacionAbiertaId] = useState(null);
   const [rutinaEditando, setRutinaEditando] = useState(null);
   const [ejerciciosEditando, setEjerciciosEditando] = useState([]);
+  const [filtroRutinaTexto, setFiltroRutinaTexto] = useState('');
+const [filtroRutinaSemana, setFiltroRutinaSemana] = useState('');
+const [filtroRutinaDia, setFiltroRutinaDia] = useState('');
+const [filtroRutinaGrupo, setFiltroRutinaGrupo] = useState('');
+const [rutinaCopiando, setRutinaCopiando] = useState(null);
+const [copiarRutinaSemana, setCopiarRutinaSemana] = useState('Semana 2');
+const [copiarRutinaDia, setCopiarRutinaDia] = useState('Lunes');
+const [rutinaParaPlanificar, setRutinaParaPlanificar] = useState(null);
+const [diaDestinoPlanificacionRapida, setDiaDestinoPlanificacionRapida] = useState('Lunes');
+const [semanaDestinoPlanificacionRapida, setSemanaDestinoPlanificacionRapida] = useState('Semana 1');
 
   const [grupoSeleccionado, setGrupoSeleccionado] = useState('');
   const [grupoRutina, setGrupoRutina] = useState('');
@@ -294,11 +412,37 @@ const [segundosSesion, setSegundosSesion] = useState(0);
   }
 
   async function abrirRutina(rutina) {
-    setRutinaAbierta(rutina);
-    const res = await fetch(`${API_URL}?action=listarDetalleRutina&idRutina=${rutina.idRutina}`);
-    const data = await res.json();
-    if (data.ok) setDetalleRutina(data.detalle || []);
+  if (!rutina?.idRutina) {
+    alert('Esta planificación no tiene idRutina cargado');
+    console.log('Rutina recibida:', rutina);
+    return;
   }
+
+  setRutinaAbierta(rutina);
+
+  const res = await fetch(
+    `${API_URL}?action=listarDetalleRutina&idRutina=${rutina.idRutina}`
+  );
+
+  const data = await res.json();
+
+  if (data.ok) {
+    setDetalleRutina(data.detalle || []);
+  } else {
+    alert('No se pudo cargar el detalle de la rutina');
+  }
+}
+  async function toggleVerRutinaPlanificada(planId, rutina) {
+  if (String(planificacionAbiertaId) === String(planId)) {
+    setPlanificacionAbiertaId(null);
+    setRutinaAbierta(null);
+    setDetalleRutina([]);
+    return;
+  }
+
+  setPlanificacionAbiertaId(planId);
+  await abrirRutina(rutina);
+}
 
   async function comenzarEdicionRutina(rutina) {
     setRutinaEditando({
@@ -357,6 +501,73 @@ const [segundosSesion, setSegundosSesion] = useState(0);
   function eliminarEjercicioEditando(index) {
     setEjerciciosEditando((prev) => prev.filter((_, i) => i !== index));
   }
+  function moverEjercicioArriba(index) {
+  if (index === 0) return;
+
+  const copia = [...ejerciciosEditando];
+
+  [copia[index - 1], copia[index]] =
+  [copia[index], copia[index - 1]];
+
+  setEjerciciosEditando(copia);
+}
+
+function moverEjercicioAbajo(index) {
+  if (index === ejerciciosEditando.length - 1) return;
+
+  const copia = [...ejerciciosEditando];
+
+  [copia[index + 1], copia[index]] =
+  [copia[index], copia[index + 1]];
+
+  setEjerciciosEditando(copia);
+}
+function handleDragEnd(event) {
+  const { active, over } = event;
+
+  if (!over || active.id === over.id) return;
+
+  setEjerciciosEditando((items) => {
+    const oldIndex = Number(active.id);
+    const newIndex = Number(over.id);
+
+    return arrayMove(items, oldIndex, newIndex);
+  });
+}
+async function handleDragEndCalendario(event) {
+  const { active, over } = event;
+
+  if (!over) return;
+
+  const idPlanificacion = String(active.id);
+  const [nuevaSemana, nuevoDia] = String(over.id).split('|||');
+
+  if (!nuevaSemana || !nuevoDia) return;
+
+  const item = planificacion.find(
+    (p) => String(p.idPlanificacion || p.id) === idPlanificacion
+  );
+
+  if (!item) return;
+
+  setPlanificacion((prev) =>
+    prev.map((p) =>
+      String(p.idPlanificacion || p.id) === idPlanificacion
+        ? { ...p, semana: nuevaSemana, dia: nuevoDia }
+        : p
+    )
+  );
+
+  await enviar({
+    action: 'moverPlanificacion',
+    idPlanificacion,
+    id: idPlanificacion,
+    semana: nuevaSemana,
+    dia: nuevoDia,
+  });
+
+  setTimeout(cargarPlanificacion, 1000);
+}
 
   async function guardarEdicionRutina() {
     if (!rutinaEditando) return alert('No hay rutina para editar');
@@ -546,7 +757,145 @@ const [segundosSesion, setSegundosSesion] = useState(0);
     setTimeout(cargarRutinas, 1000);
   }
 
-  async function copiarSemanaCompleta() {
+  async function borrarRutina(rutina) {
+  if (!rutina) return;
+
+  const confirmar = confirm(`¿Seguro querés eliminar "${rutina.nombreRutina}"?`);
+
+  if (!confirmar) return;
+
+  await enviar({
+    action: 'borrarRutina',
+    idRutina: rutina.idRutina,
+  });
+
+  alert('Rutina eliminada');
+
+  if (rutinaAbierta?.idRutina === rutina.idRutina) {
+    setRutinaAbierta(null);
+    setDetalleRutina([]);
+    setPlanificacionAbiertaId(null);
+  }
+
+  setTimeout(cargarRutinas, 1000);
+}
+async function copiarRutinaADestino() {
+  if (!rutinaCopiando) return alert('Elegí una rutina para copiar');
+
+  const res = await fetch(
+    `${API_URL}?action=listarDetalleRutina&idRutina=${rutinaCopiando.idRutina}`
+  );
+
+  const data = await res.json();
+
+  const detalle = data.ok ? data.detalle || [] : [];
+
+  if (detalle.length === 0) {
+    return alert('No se pudieron leer los ejercicios de esta rutina');
+  }
+
+  await enviar({
+    action: 'crearRutina',
+    nombreRutina: `${rutinaCopiando.nombreRutina} - ${copiarRutinaSemana} ${copiarRutinaDia}`,
+    semana: copiarRutinaSemana,
+    dia: copiarRutinaDia,
+    objetivo: rutinaCopiando.objetivo || '',
+    rama: rutinaCopiando.rama,
+    tira: rutinaCopiando.tira,
+    categoria: rutinaCopiando.categoria,
+    ejercicios: detalle.map((e) => ({
+      bloque: e.bloque || '',
+      nombre: e.ejercicio || '',
+      series: e.series || '',
+      reps: e.reps || '',
+      kgSugerido: e.kgSugerido || '',
+      rpe: e.rpe || '',
+      tempo: e.tempo || '',
+      videoUrl: e.videoUrl || '',
+      observaciones: e.observaciones || '',
+    })),
+  });
+
+  alert('Rutina copiada correctamente');
+
+  setRutinaCopiando(null);
+
+  setTimeout(cargarRutinas, 1000);
+}
+async function planificarRutinaRapida() {
+  if (!rutinaParaPlanificar) return alert('Elegí una rutina para mover');
+
+  await enviar({
+    action: 'moverPlanificacion',
+    idPlanificacion: rutinaParaPlanificar.idPlanificacion || rutinaParaPlanificar.id,
+    id: rutinaParaPlanificar.idPlanificacion || rutinaParaPlanificar.id,
+    semana: semanaDestinoPlanificacionRapida,
+    dia: diaDestinoPlanificacionRapida,
+  });
+
+  setPlanificacion((prev) =>
+    prev.map((p) =>
+      String(p.idPlanificacion || p.id) ===
+      String(rutinaParaPlanificar.idPlanificacion || rutinaParaPlanificar.id)
+        ? {
+    ...p,
+    semana: semanaDestinoPlanificacionRapida,
+    dia: diaDestinoPlanificacionRapida,
+  }
+        : p
+    )
+  );
+
+  alert('Rutina movida correctamente');
+  setRutinaParaPlanificar(null);
+  setTimeout(cargarPlanificacion, 1000);
+}
+async function eliminarPlanificacion(p) {
+  const confirmar = confirm(`¿Eliminar "${p.nombreRutina}" del calendario?`);
+
+  if (!confirmar) return;
+
+  const idPlanificacion = p.idPlanificacion || p.id;
+
+  setPlanificacion((prev) =>
+    prev.filter((item) =>
+      String(item.idPlanificacion || item.id) !== String(idPlanificacion)
+    )
+  );
+
+  await enviar({
+    action: 'borrarPlanificacion',
+    idPlanificacion,
+    id: idPlanificacion,
+  });
+
+  alert('Planificación eliminada');
+  setTimeout(cargarPlanificacion, 1000);
+}
+
+async function duplicarPlanificacion(p) {
+  const confirmar = confirm(`¿Duplicar "${p.nombreRutina}" en el calendario?`);
+
+  if (!confirmar) return;
+
+  await enviar({
+    action: 'guardarPlanificacion',
+    fecha: '',
+    semana: p.semana,
+    dia: p.dia,
+    idRutina: p.idRutina,
+    nombreRutina: p.nombreRutina,
+    rama: p.rama,
+    tira: p.tira,
+    categoria: p.categoria,
+    observaciones: `Duplicado desde ${p.semana} ${p.dia}`,
+  });
+
+  alert('Planificación duplicada');
+  setTimeout(cargarPlanificacion, 1000);
+}
+
+async function copiarSemanaCompleta() {
     if (filtroSemana === semanaDestinoCopiar) {
       return alert('Elegí una semana destino distinta');
     }
@@ -1231,6 +1580,28 @@ const asistenciaHoy = asistencia.filter((a) => {
       r.categoria === grupoActualJugador.categoria
     );
   });
+  const rutinasFiltradasAdmin = rutinas.filter((r) => {
+  const texto = filtroRutinaTexto.toLowerCase();
+
+  const coincideTexto =
+    !texto ||
+    String(r.nombreRutina || '').toLowerCase().includes(texto) ||
+    String(r.objetivo || '').toLowerCase().includes(texto);
+
+  const coincideSemana =
+    !filtroRutinaSemana ||
+    String(r.semana || '') === String(filtroRutinaSemana);
+
+  const coincideDia =
+    !filtroRutinaDia ||
+    String(r.dia || '') === String(filtroRutinaDia);
+
+  const coincideGrupo =
+    !filtroRutinaGrupo ||
+    `${r.rama} · ${r.tira} · ${r.categoria}` === filtroRutinaGrupo;
+
+  return coincideTexto && coincideSemana && coincideDia && coincideGrupo;
+});
 
   const bancoEjerciciosFiltrado = bancoEjercicios.filter((e) => {
     const coincideBloque = !bancoFiltro.bloque || String(e.bloque || '').toLowerCase().includes(bancoFiltro.bloque.toLowerCase());
@@ -1263,6 +1634,23 @@ const asistenciaHoy = asistencia.filter((a) => {
     if (texto.includes('fuerza')) return { borderLeft: '6px solid #eab308', background: 'rgba(234,179,8,0.08)' };
 
     return { borderLeft: '6px solid #a3e635', background: 'rgba(163,230,53,0.06)' };
+  }
+  function convertirYoutubeEmbed(url) {
+    if (!url) return '';
+
+    let videoId = '';
+
+    if (url.includes('watch?v=')) {
+      videoId = url.split('watch?v=')[1].split('&')[0];
+    } else if (url.includes('youtu.be/')) {
+      videoId = url.split('youtu.be/')[1].split('?')[0];
+    } else if (url.includes('/shorts/')) {
+      videoId = url.split('/shorts/')[1].split('?')[0];
+    } else if (url.includes('/embed/')) {
+      return url;
+    }
+
+    return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
   }
 
   function BloqueTag({ bloque }) {
@@ -1975,7 +2363,7 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
 
         {esPF && tab === 'pf' && (
           <div className="grid grid-cols-1 md:grid-cols-[230px_1fr] gap-5 mt-5">
-            <aside className="sidebar">
+            <aside className="sidebar overflow-x-auto md:overflow-visible">
               <NavButton id="dashboard" label="Dashboard" />
               <NavButton id="calendario" label="Calendario" />
               <NavButton id="rutinas" label="Rutinas" />
@@ -2368,41 +2756,45 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
                       Rutinas asignadas por día. No duplica rutinas: reutiliza las ya creadas.
                     </p>
 
-                    <div className="grid md:grid-cols-7 gap-3 mt-5">
-                      {diasSemana.map((dia) => (
-                        <div
-                          key={dia}
-                          className="rounded-2xl bg-zinc-900 p-3 border border-white/5 min-h-32"
-                        >
-                          <p className="font-black text-lime-400">{dia}</p>
+                    <DndContext onDragEnd={handleDragEndCalendario}></DndContext>
+                    <DndContext
+  collisionDetection={closestCenter}
+  onDragEnd={handleDragEndCalendario}
+>
+  <div className="grid md:grid-cols-7 gap-3 mt-5">
+    {diasSemana.map((dia) => (
+      <DiaDroppable key={dia} id={dia}>
+        <p className="font-black text-lime-400">{dia}</p>
 
-                          <div className="mt-3 space-y-2">
-                            {planificacionFiltrada
-                              .filter(p => p.dia === dia)
-                              .map((p) => (
-                                <button
-                                  key={p.id}
-                                  onClick={() => {
-                                    const rutina = rutinas.find(r => String(r.idRutina) === String(p.idRutina));
-                                    if (rutina) abrirRutina(rutina);
-                                  }}
-                                  className="w-full rounded-xl bg-black/40 p-2 text-left border border-white/5"
-                                >
-                                  <p className="text-sm font-bold">{p.nombreRutina}</p>
-                                  <p className="text-xs text-zinc-400 mt-1">{p.categoria}</p>
-                                  {p.fecha && (
-                                    <p className="text-xs text-zinc-500">{fechaISO(p.fecha)}</p>
-                                  )}
-                                </button>
-                              ))}
+        <div className="mt-3 space-y-2">
+          {planificacionFiltrada
+            .filter((p) => p.dia === dia)
+            .map((p) => (
+<RutinaPlanificadaDraggable
+  key={p.idPlanificacion || p.id || `${p.idRutina}-${p.dia}-${p.semana}`}
+  id={p.idPlanificacion || p.id || `${p.idRutina}-${p.dia}-${p.semana}`}
+>
+                <div
+  className="w-full rounded-xl bg-black/40 p-2 text-left border border-white/5 cursor-grab active:cursor-grabbing"
+  style={{ touchAction: 'none' }}
+>
+                  <p className="text-sm font-bold">{p.nombreRutina}</p>
+                  <p className="text-xs text-zinc-400 mt-1">{p.categoria}</p>
+                  {p.fecha && (
+                    <p className="text-xs text-zinc-500">{fechaISO(p.fecha)}</p>
+                  )}
+                </div>
+              </RutinaPlanificadaDraggable>
+            ))}
 
-                            {planificacionFiltrada.filter(p => p.dia === dia).length === 0 && (
-                              <p className="text-xs text-zinc-600 mt-2">Sin rutina</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+          {planificacionFiltrada.filter((p) => p.dia === dia).length === 0 && (
+            <p className="text-xs text-zinc-600 mt-2">Soltar rutina acá</p>
+          )}
+        </div>
+      </DiaDroppable>
+    ))}
+  </div>
+</DndContext>
                   </div>
 
                   {alertasWellness.length > 0 && (
@@ -2583,132 +2975,569 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
                       </div>
                     </div>
 
-                    <div className="grid md:grid-cols-7 gap-3 mt-5">
-                      {diasSemana.map((dia) => (
-                        <div
-                          key={dia}
-                          className="rounded-2xl bg-zinc-900 p-3 border border-white/5 min-h-40"
-                        >
-                          <p className="font-black text-lime-400">{dia}</p>
+                   <DndContext
+  collisionDetection={closestCenter}
+  onDragEnd={handleDragEndCalendario}
+>
+                   <div className="overflow-x-auto mt-5 -mx-4 px-4 md:mx-0 md:px-0">
+  <div className="min-w-[1000px] md:min-w-[1200px]">
+    <div className="grid grid-cols-8 gap-2">
+      <div></div>
 
-                          <div className="mt-3 space-y-2">
-                            {planificacionFiltrada
-                              .filter(p => p.dia === dia)
-                              .map((p) => (
-                                <div
-                                  key={p.id}
-                                  className="rounded-xl bg-black/40 p-2 border border-white/5"
-                                >
-                                  <p className="text-sm font-bold">{p.nombreRutina}</p>
-                                  <p className="text-xs text-zinc-400 mt-1">
-                                    {p.rama} · {p.categoria}
-                                  </p>
-                                  {p.fecha && (
-                                    <p className="text-xs text-zinc-500">{fechaISO(p.fecha)}</p>
-                                  )}
-                                </div>
-                              ))}
+      {diasSemana.map((dia) => (
+        <div
+          key={dia}
+          className="rounded-xl bg-zinc-800 p-3 text-center font-black text-lime-400"
+        >
+          {dia}
+        </div>
+      ))}
 
-                            {planificacionFiltrada.filter(p => p.dia === dia).length === 0 && (
-                              <p className="text-xs text-zinc-600 mt-2">Sin rutina asignada</p>
-                            )}
-                          </div>
+      {['Semana 1','Semana 2','Semana 3','Semana 4','Semana 5','Semana 6','Semana 7','Semana 8'].map((semana) => (
+        <div key={semana} className="contents">
+          <div className="rounded-xl bg-zinc-800 p-3 font-black text-white">
+            {semana}
+          </div>
+
+          {diasSemana.map((dia) => {
+            const items = planificacion.filter(
+              (p) => p.semana === semana && p.dia === dia
+            );
+
+            return (
+  <CeldaCalendarioDroppable
+    key={`${semana}-${dia}`}
+    id={`${semana}|||${dia}`}
+  >
+                {items.length === 0 ? (
+                  <p className="text-xs text-zinc-600">—</p>
+                ) : (
+                  items.map((p) => {
+                  const rutina = rutinas.find(
+  (r) =>
+    String(r.idRutina) === String(p.idRutina) ||
+    String(r.nombreRutina) === String(p.nombreRutina)
+);
+
+                    return (
+  <RutinaPlanificadaDraggable
+    key={`${p.idPlanificacion || p.id || p.idRutina}-${p.semana}-${p.dia}-${p.nombreRutina}`}
+    id={String(p.idPlanificacion || p.id)}
+  >
+    <div className="rounded-lg bg-black/40 p-3 mb-2 border border-white/5 overflow-hidden">
+                        <p className="text-xs font-bold">
+                          {p.nombreRutina}
+                        </p>
+
+                        <p className="text-[10px] text-zinc-500">
+                          {p.categoria}
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-1 mt-2">
+                          <button
+  type="button"
+  onClick={() => {
+  console.log('PLANIFICACION ABRIR:', p);
+
+  abrirRutina({
+    idRutina: p.idRutina || p.IDRutina || p.rutinaId || p.id,
+    nombreRutina: p.nombreRutina,
+    semana: p.semana,
+    dia: p.dia,
+  });
+}}
+  className="rounded-lg bg-zinc-800 px-2 py-1 text-[11px] font-black text-white flex-1"
+>
+  Abrir
+</button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+  setRutinaParaPlanificar({
+  ...p,
+  idPlanificacion: p.idPlanificacion || p.id,
+});
+
+  setSemanaDestinoPlanificacionRapida(semana);
+  setDiaDestinoPlanificacionRapida(dia);
+}}
+                            className="rounded-lg bg-lime-400 px-2 py-1 text-[10px] font-black text-black"
+                          >
+                            Mover
+                          </button>
+                          <button
+  type="button"
+  onClick={() => duplicarPlanificacion(p)}
+  className="rounded-lg bg-blue-500/20 px-2 py-1 text-[10px] font-black text-blue-300"
+>
+  Duplicar
+</button>
+
+<button
+  type="button"
+  onClick={() => eliminarPlanificacion(p)}
+  className="rounded-lg bg-red-500/20 px-2 py-1 text-[10px] font-black text-red-300"
+>
+  Eliminar
+</button>
                         </div>
-                      ))}
-                    </div>
+                                           </div>
+                    </RutinaPlanificadaDraggable>
+                    );
+                  })
+                )}
+              </CeldaCalendarioDroppable>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  </div>
+</div>
+</DndContext>
+{rutinaParaPlanificar && (
+  <div className="mt-5 rounded-3xl bg-zinc-950/70 p-5 border border-lime-400/30">
+    <h3 className="font-black text-lime-400">Mover rutina</h3>
+
+    <p className="text-sm text-zinc-400 mt-1">
+      {rutinaParaPlanificar.nombreRutina}
+    </p>
+
+    <div className="grid md:grid-cols-2 gap-3 mt-4">
+      <select
+        value={semanaDestinoPlanificacionRapida}
+        onChange={(e) => setSemanaDestinoPlanificacionRapida(e.target.value)}
+        className="input"
+      >
+        <option>Semana 1</option>
+        <option>Semana 2</option>
+        <option>Semana 3</option>
+        <option>Semana 4</option>
+        <option>Semana 5</option>
+        <option>Semana 6</option>
+        <option>Semana 7</option>
+        <option>Semana 8</option>
+      </select>
+
+      <select
+        value={diaDestinoPlanificacionRapida}
+        onChange={(e) => setDiaDestinoPlanificacionRapida(e.target.value)}
+        className="input"
+      >
+        {diasSemana.map((dia) => (
+          <option key={dia}>{dia}</option>
+        ))}
+      </select>
+    </div>
+
+    <button
+      type="button"
+      onClick={planificarRutinaRapida}
+      className="btn-green mt-4"
+    >
+      Guardar movimiento
+    </button>
+  </div>
+)}
+{rutinaAbierta && (
+  <div className="mt-5 rounded-3xl bg-zinc-950/70 p-5 border border-white/10">
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <h3 className="font-black text-lime-400">
+          {rutinaAbierta.nombreRutina}
+        </h3>
+
+        <p className="text-sm text-zinc-400 mt-1">
+          {rutinaAbierta.semana || '-'} · {rutinaAbierta.dia || '-'}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          setRutinaAbierta(null);
+          setDetalleRutina([]);
+        }}
+        className="rounded-2xl bg-zinc-800 text-white px-4 py-2 font-black"
+      >
+        Cerrar
+      </button>
+    </div>
+
+    <div className="mt-4 grid gap-3">
+      {detalleRutina.length === 0 ? (
+        <p className="text-sm text-zinc-500">
+          No se encontraron ejercicios para esta rutina.
+        </p>
+      ) : (
+        detalleRutina.map((e, index) => (
+          <div
+            key={e.idDetalle || index}
+            className="exercise-card"
+            style={estiloBloque(e.bloque)}
+          >
+            <BloqueTag bloque={e.bloque} />
+
+            <p className="font-black">
+              {index + 1}. {e.ejercicio}
+            </p>
+
+            <p className="text-sm text-zinc-300">
+              {e.bloque} · {e.series} series · {e.reps} reps
+            </p>
+
+            <p className="text-sm text-zinc-400">
+              Kg sugerido: {e.kgSugerido || '-'} · RPE {e.rpe || '-'} · Tempo {e.tempo || '-'}
+            </p>
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+)}
                   </div>
                 </>
               )}
 
               {seccionPF === 'rutinas' && (
-                <>
-                  <div>
-                    <h2 className="section-title">Rutinas creadas</h2>
-                    <p className="section-subtitle">Abrí una rutina para ver sus ejercicios.</p>
+  <>
+    <div>
+      <h2 className="section-title">Rutinas creadas</h2>
+      <p className="section-subtitle">
+        Gestioná rutinas: ver ejercicios, editar, duplicar, exportar o eliminar.
+      </p>
+    </div>
+
+    <div className="premium-card">
+  <p className="font-black text-lime-400 mb-3">Filtros rápidos</p>
+
+  <div className="grid md:grid-cols-4 gap-3">
+    <input
+      value={filtroRutinaTexto}
+      onChange={(e) => setFiltroRutinaTexto(e.target.value)}
+      placeholder="Buscar rutina..."
+      className="input"
+    />
+
+    <select
+      value={filtroRutinaSemana}
+      onChange={(e) => setFiltroRutinaSemana(e.target.value)}
+      className="input"
+    >
+      <option value="">Todas las semanas</option>
+      {[...new Set(rutinas.map((r) => r.semana).filter(Boolean))].map((semana) => (
+        <option key={semana} value={semana}>
+          {semana}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={filtroRutinaDia}
+      onChange={(e) => setFiltroRutinaDia(e.target.value)}
+      className="input"
+    >
+      <option value="">Todos los días</option>
+      {diasSemana.map((dia) => (
+        <option key={dia} value={dia}>
+          {dia}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={filtroRutinaGrupo}
+      onChange={(e) => setFiltroRutinaGrupo(e.target.value)}
+      className="input"
+    >
+      <option value="">Todos los grupos</option>
+      {[...new Set(rutinas.map((r) => `${r.rama} · ${r.tira} · ${r.categoria}`))].map((grupo) => (
+        <option key={grupo} value={grupo}>
+          {grupo}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  <button
+    type="button"
+    onClick={() => {
+      setFiltroRutinaTexto('');
+      setFiltroRutinaSemana('');
+      setFiltroRutinaDia('');
+      setFiltroRutinaGrupo('');
+    }}
+    className="mt-3 rounded-xl bg-zinc-800 text-white px-3 py-2 text-sm font-black border border-white/10"
+  >
+    Limpiar filtros
+  </button>
+</div>
+    <div className="grid gap-4">
+      {rutinasFiltradasAdmin.map((r) => {
+        const estaAbierta =
+          rutinaAbierta?.idRutina === r.idRutina &&
+          planificacionAbiertaId === `rutina-${r.idRutina}`;
+
+        return (
+          <div key={r.idRutina} className="routine-card">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+              <div>
+                <p className="font-black text-lime-400 text-lg">
+                  {r.nombreRutina}
+                </p>
+
+                <p className="text-sm text-zinc-300 mt-1">
+                  {r.rama} · {r.tira} · {r.categoria}
+                </p>
+
+                <p className="text-sm text-zinc-400">
+                  {r.semana} · {r.dia}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (estaAbierta) {
+                      setRutinaAbierta(null);
+                      setDetalleRutina([]);
+                      setPlanificacionAbiertaId(null);
+                    } else {
+                      setPlanificacionAbiertaId(`rutina-${r.idRutina}`);
+                      abrirRutina(r);
+                    }
+                  }}
+                  className="rounded-xl bg-lime-400 text-black px-3 py-2 text-sm font-black"
+                >
+                  {estaAbierta ? 'Ocultar' : 'Ver'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => comenzarEdicionRutina(r)}
+                  className="rounded-xl bg-white text-black px-3 py-2 text-sm font-black"
+                >
+                  Editar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => duplicarRutina(r)}
+                  className="rounded-xl bg-zinc-800 text-white px-3 py-2 text-sm font-black border border-white/10"
+                >
+                  Duplicar
+                </button>
+                <button
+  type="button"
+  onClick={() => {
+    setRutinaCopiando(r);
+    setCopiarRutinaSemana(r.semana || 'Semana 2');
+    setCopiarRutinaDia(r.dia || 'Lunes');
+  }}
+  className="rounded-xl bg-cyan-500 text-black px-3 py-2 text-sm font-black"
+>
+  Copiar a...
+</button>
+<button
+  type="button"
+  onClick={() => {
+    setRutinaParaPlanificar(r);
+    setSemanaDestinoPlanificacionRapida(r.semana || 'Semana 1');
+    setDiaDestinoPlanificacionRapida(r.dia || 'Lunes');
+  }}
+  className="rounded-xl bg-purple-500 text-white px-3 py-2 text-sm font-black"
+>
+  Planificar
+</button>
+
+                <button
+                  type="button"
+                  onClick={() => exportarRutinaPDF(r)}
+                  className="rounded-xl bg-white text-black px-3 py-2 text-sm font-black"
+                >
+                  PDF
+                </button>
+
+                {esAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => borrarRutina(r)}
+                    className="rounded-xl bg-red-500 text-white px-3 py-2 text-sm font-black"
+                  >
+                    Eliminar
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {estaAbierta && (
+              <div className="mt-5 space-y-3">
+                {detalleRutina.length === 0 && (
+                  <div className="rounded-2xl bg-zinc-800 p-4 text-zinc-400">
+                    Esta rutina todavía no tiene ejercicios cargados.
                   </div>
+                )}
 
-                  <div className="grid gap-3">
-                    {rutinas.map((r) => (
-                      <div key={r.idRutina} className="routine-card">
-                        <button onClick={() => abrirRutina(r)} className="w-full text-left">
-                          <p className="font-black text-lime-400">{r.nombreRutina}</p>
-                          <p className="text-sm text-zinc-300 mt-1">
-                            {r.rama} · {r.tira} · {r.categoria}
-                          </p>
-                          <p className="text-sm text-zinc-400">
-                            Semana {r.semana} · {r.dia}
-                          </p>
-                        </button>
+                {detalleRutina.map((e, index) => (
+                  <div
+                    key={e.idDetalle || index}
+                    className="exercise-card"
+                    style={estiloBloque(e.bloque)}
+                  >
+                    <BloqueTag bloque={e.bloque} />
 
-                        <div className="flex flex-wrap gap-2 mt-4">
-                          <button
-                            onClick={() => abrirRutina(r)}
-                            className="rounded-xl bg-lime-400 text-black px-3 py-2 text-sm font-black"
-                          >
-                            Abrir
-                          </button>
-                          <button
-                            onClick={() => duplicarRutina(r)}
-                            className="rounded-xl bg-zinc-700 text-white px-3 py-2 text-sm font-black"
-                          >
-                            Duplicar
-                          </button>
-                          <button
-                            onClick={() => exportarRutinaPDF(r)}
-                            className="rounded-xl bg-white text-black px-3 py-2 text-sm font-black"
-                          >
-                            PDF
-                          </button>
-                        </div>
+                    <p className="font-black">
+                      {index + 1}. {e.ejercicio}
+                    </p>
+
+                    <p className="text-sm text-zinc-300">
+                      {e.bloque} · {e.series} series · {e.reps} reps
+                    </p>
+
+                    <p className="text-sm text-zinc-400">
+                      Kg sugerido: {e.kgSugerido || '-'} · RPE {e.rpe || '-'} · Tempo {e.tempo || '-'}
+                    </p>
+
+                    {e.videoUrl && (
+                      <div className="mt-3 overflow-hidden rounded-2xl bg-black border border-white/10">
+                        <iframe
+                          src={convertirYoutubeEmbed(e.videoUrl)}
+                          className="w-full aspect-video"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
                       </div>
-                    ))}
+                    )}
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+     {rutinaCopiando && (
+  <div className="premium-card border border-cyan-400/30 mb-4">
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div>
+        <p className="font-black text-cyan-300">
+          Copiar rutina
+        </p>
 
-                  {rutinaAbierta && (
-                    <div className="premium-card">
-                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-                        <div>
-                          <h3 className="text-2xl font-black text-lime-400">{rutinaAbierta.nombreRutina}</h3>
-                          <p className="text-sm text-zinc-400 mt-1">
-                            Semana {rutinaAbierta.semana} · {rutinaAbierta.dia}
-                          </p>
-                        </div>
+        <p className="text-sm text-zinc-400">
+          {rutinaCopiando.nombreRutina}
+        </p>
+      </div>
 
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => exportarRutinaPDF(rutinaAbierta)}
-                            className="rounded-2xl bg-lime-400 text-black px-4 py-3 font-black"
-                          >
-                            Descargar PDF
-                          </button>
-                          <button
-                            onClick={() => duplicarRutina(rutinaAbierta)}
-                            className="rounded-2xl bg-zinc-800 text-white px-4 py-3 font-black border border-white/10"
-                          >
-                            Duplicar
-                          </button>
-                          <button
-                            onClick={() => comenzarEdicionRutina(rutinaAbierta)}
-                            className="rounded-2xl bg-white text-black px-4 py-3 font-black"
-                          >
-                            Editar rutina
-                          </button>
-                        </div>
-                      </div>
+      <button
+        type="button"
+        onClick={() => setRutinaCopiando(null)}
+        className="rounded-xl bg-zinc-800 text-white px-3 py-2 text-sm font-black"
+      >
+        Cancelar
+      </button>
+    </div>
 
-                      <div className="mt-4 grid gap-3">
-                        {detalleRutina.map((e) => (
-                          <div key={e.idDetalle} className="exercise-card" style={estiloBloque(e.bloque)}>
-                            <BloqueTag bloque={e.bloque} />
-                            <p className="font-black">{e.orden}. {e.ejercicio}</p>
-                            <p className="text-sm text-zinc-300">
-                              {e.bloque} · {e.series} series · {e.reps} reps
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+    <div className="grid md:grid-cols-3 gap-3 mt-4">
+      <select
+        value={copiarRutinaSemana}
+        onChange={(e) => setCopiarRutinaSemana(e.target.value)}
+        className="input"
+      >
+        <option>Semana 1</option>
+        <option>Semana 2</option>
+        <option>Semana 3</option>
+        <option>Semana 4</option>
+        <option>Semana 5</option>
+        <option>Semana 6</option>
+      </select>
+
+      <select
+        value={copiarRutinaDia}
+        onChange={(e) => setCopiarRutinaDia(e.target.value)}
+        className="input"
+      >
+        {diasSemana.map((dia) => (
+          <option key={dia} value={dia}>
+            {dia}
+          </option>
+        ))}
+      </select>
+
+      <button
+        type="button"
+        onClick={copiarRutinaADestino}
+        className="rounded-xl bg-cyan-500 text-black px-4 py-3 font-black"
+      >
+        Copiar rutina
+      </button>
+    </div>
+  </div>
+)}             
+{rutinaParaPlanificar && (
+  <div className="premium-card border border-purple-400/30 mb-4">
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div>
+        <p className="font-black text-purple-300">
+          Planificar rutina
+        </p>
+
+        <p className="text-sm text-zinc-400">
+          {rutinaParaPlanificar.nombreRutina}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setRutinaParaPlanificar(null)}
+        className="rounded-xl bg-zinc-800 text-white px-3 py-2 text-sm font-black"
+      >
+        Cancelar
+      </button>
+    </div>
+
+    <div className="grid md:grid-cols-3 gap-3 mt-4">
+      <select
+        value={semanaDestinoPlanificacionRapida}
+        onChange={(e) =>
+          setSemanaDestinoPlanificacionRapida(e.target.value)
+        }
+        className="input"
+      >
+        <option>Semana 1</option>
+        <option>Semana 2</option>
+        <option>Semana 3</option>
+        <option>Semana 4</option>
+        <option>Semana 5</option>
+        <option>Semana 6</option>
+      </select>
+
+      <select
+        value={diaDestinoPlanificacionRapida}
+        onChange={(e) =>
+          setDiaDestinoPlanificacionRapida(e.target.value)
+        }
+        className="input"
+      >
+        {diasSemana.map((dia) => (
+          <option key={dia} value={dia}>
+            {dia}
+          </option>
+        ))}
+      </select>
+
+      <button
+        type="button"
+        onClick={planificarRutinaRapida}
+        className="rounded-xl bg-purple-500 text-white px-4 py-3 font-black"
+      >
+        Planificar rutina
+      </button>
+    </div>
+  </div>
+)}
 
                   {rutinaEditando && (
                     <div className="premium-card border border-lime-400/30">
@@ -2798,20 +3627,49 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
                           </div>
                         </div>
 
-                        {ejerciciosEditando.map((ejercicio, index) => (
-                          <div key={index} className="rounded-3xl bg-zinc-950/60 p-4 border border-white/5">
+                        
+ 
+    <DndContext
+  collisionDetection={closestCenter}
+  onDragEnd={handleDragEnd}
+>
+  <SortableContext
+    items={ejerciciosEditando.map((_, index) => String(index))}
+    strategy={verticalListSortingStrategy}
+  >
+    {ejerciciosEditando.map((ejercicio, index) => (
+      <EjercicioSortable key={index} id={String(index)}>
+                          <div className="rounded-3xl bg-zinc-950/60 p-4 border border-white/5">
                             <div className="flex items-center justify-between gap-3 mb-3">
-                              <p className="font-black text-lime-400">
-                                Ejercicio {index + 1}
-                              </p>
+  <p className="font-black text-lime-400">
+    Ejercicio {index + 1}
+  </p>
 
-                              <button
-                                onClick={() => eliminarEjercicioEditando(index)}
-                                className="rounded-xl bg-red-500/20 text-red-300 px-3 py-2 text-sm font-black"
-                              >
-                                Eliminar
-                              </button>
-                            </div>
+  <div className="flex gap-2">
+    <button
+      type="button"
+      onClick={() => moverEjercicioArriba(index)}
+      className="rounded-xl bg-zinc-800 px-3 py-2 text-sm font-black"
+    >
+      ↑
+    </button>
+
+    <button
+      type="button"
+      onClick={() => moverEjercicioAbajo(index)}
+      className="rounded-xl bg-zinc-800 px-3 py-2 text-sm font-black"
+    >
+      ↓
+    </button>
+
+    <button
+      onClick={() => eliminarEjercicioEditando(index)}
+      className="rounded-xl bg-red-500/20 text-red-300 px-3 py-2 text-sm font-black"
+    >
+      Eliminar
+    </button>
+  </div>
+</div>
 
                             <div className="grid md:grid-cols-2 gap-3">
                               <input
@@ -2878,8 +3736,35 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
                               />
                             </div>
                           </div>
-                        ))}
+          </EjercicioSortable>
+      ))}
+  </SortableContext>
+</DndContext>
 
+<div className="mt-6">
+  <h3 className="font-black text-lime-400 mb-3">
+    Agregar desde banco de ejercicios
+  </h3>
+
+  <div className="grid gap-2 max-h-72 overflow-y-auto">
+    {bancoEjercicios.slice(0, 50).map((ejercicioBanco) => (
+      <button
+        key={ejercicioBanco.id}
+        type="button"
+        onClick={() => agregarDesdeBancoAEdicion(ejercicioBanco)}
+        className="text-left rounded-xl bg-zinc-900 border border-white/10 p-3"
+      >
+        <p className="font-black">
+          {ejercicioBanco.ejercicio}
+        </p>
+
+        <p className="text-xs text-zinc-500">
+          {ejercicioBanco.bloque}
+        </p>
+      </button>
+    ))}
+  </div>
+</div>
                         <button
                           onClick={guardarEdicionRutina}
                           className="btn-green"
@@ -3592,16 +4477,14 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
                   <BloqueTag bloque={ejercicioActualSesion.bloque} />
                   <p className="text-sm text-zinc-400">Ejercicio {ejercicioActualIndex + 1} de {respuestasSesion.length}</p>
                   <h3 className="text-2xl font-black mt-1">{ejercicioActualSesion.ejercicio}</h3>
-                  {ejercicioActualSesion.videoUrl && (
-  <div className="mt-3">
-    <a
-      href={ejercicioActualSesion.videoUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 rounded-2xl bg-white text-black px-4 py-3 font-black hover:opacity-90"
-    >
-      ▶️ Ver video del ejercicio
-    </a>
+{ejercicioActualSesion.videoUrl && (
+  <div className="mt-4 overflow-hidden rounded-3xl border border-white/10 bg-black">
+    <iframe
+      src={convertirYoutubeEmbed(ejercicioActualSesion.videoUrl)}
+      className="w-full aspect-video"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowFullScreen
+    />
   </div>
 )}
                   {rmEjercicioActual && (
@@ -3647,16 +4530,7 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
     </div>
   </div>
 )}
-{ejercicioActualSesion.videoUrl && (
-  <a
-    href={ejercicioActualSesion.videoUrl}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="mt-4 inline-flex items-center justify-center rounded-2xl bg-white text-black px-4 py-3 font-black"
-  >
-    ▶️ Ver video del ejercicio
-  </a>
-)}
+
                   <p className="text-zinc-300 mt-2">
                     Objetivo: {ejercicioActualSesion.seriesObjetivo || '-'} series · {ejercicioActualSesion.repsObjetivo || '-'} reps · Kg sugerido {ejercicioActualSesion.kgSugerido || '-'} · RPE {ejercicioActualSesion.rpeObjetivo || '-'}
                   </p>
@@ -3878,11 +4752,44 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
                         </button>
                         <button
                           type="button"
-                          onClick={() => rutina && abrirRutina(rutina)}
+                          onClick={() => rutina && toggleVerRutinaPlanificada(p.id, rutina)}
                           className="rounded-2xl bg-white text-black px-4 py-3 font-black"
                         >
-                          Ver rutina
+                          {String(planificacionAbiertaId) === String(p.id)
+  ? 'Ocultar rutina'
+  : 'Ver rutina'}
                         </button>
+                        {String(planificacionAbiertaId) === String(p.id) && (
+  <div className="mt-4 space-y-3">
+    {detalleRutina.map((e, index) => (
+      <div
+        key={e.idDetalle || index}
+        className="exercise-card"
+        style={estiloBloque(e.bloque)}
+      >
+        <BloqueTag bloque={e.bloque} />
+
+        <h3 className="text-lg font-black">
+          {index + 1}. {e.ejercicio}
+        </h3>
+
+        <p className="text-zinc-300">
+          {e.bloque} · {e.series} series · {e.reps} reps
+        </p>
+
+        {e.videoUrl && (
+          <div className="mt-3 overflow-hidden rounded-2xl">
+            <iframe
+              src={convertirYoutubeEmbed(e.videoUrl)}
+              className="w-full aspect-video"
+              allowFullScreen
+            />
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+)}
                       </div>
                     </div>
                   );
@@ -4116,6 +5023,7 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
               </section>
             )}
 
+            
             {rutinaAbierta && (
               <section className="premium-card lg:col-span-2">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">

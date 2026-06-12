@@ -6,3 +6,66 @@
 html, body { margin: 0; background: #050505; color: white; }
 input, select, textarea { color-scheme: dark; }
 option { background: #171717; color: white; }
+@media (max-width: 768px) {
+  .app-shell {
+    display: block;
+  }
+
+  .sidebar {
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    z-index: 1 !important;
+
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    width: 100%;
+    max-width: 100%;
+    height: auto !important;
+    min-height: 0 !important;
+
+    padding: 10px;
+    margin-bottom: 14px;
+
+    background: #09090b;
+    border-radius: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .nav-btn {
+    white-space: nowrap;
+    min-width: fit-content;
+    flex: 0 0 auto;
+  }
+
+  .premium-card {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .section-title {
+    font-size: 28px;
+    line-height: 1.1;
+  }
+
+  .section-subtitle {
+    font-size: 14px;
+  }
+
+  .input,
+  .input-dark,
+  .btn-green {
+    width: 100%;
+  }
+}
+@media (max-width: 768px) {
+  aside.sidebar {
+    display: none !important;
+  }
+}
