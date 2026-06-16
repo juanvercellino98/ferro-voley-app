@@ -2185,16 +2185,34 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
     );
   }
 
-  function Stat({ label, value, tone = 'green' }) {
-    return (
-      <div className="premium-card">
-        <p className={`text-3xl font-black ${tone === 'red' ? 'text-red-400' : tone === 'yellow' ? 'text-yellow-400' : tone === 'blue' ? 'text-cyan-400' : 'text-lime-400'}`}>
+function Stat({ label, value, tone = 'green', icon = '📊' }) {
+  const color =
+    tone === 'red'
+      ? 'text-red-400'
+      : tone === 'yellow'
+      ? 'text-yellow-400'
+      : tone === 'blue'
+      ? 'text-cyan-400'
+      : 'text-lime-400';
+
+  return (
+    <div className="premium-card relative overflow-hidden">
+      <div className="flex items-center justify-between gap-3">
+        <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center text-2xl">
+          {icon}
+        </div>
+
+        <p className={`text-4xl font-black ${color}`}>
           {value}
         </p>
-        <p className="text-sm text-zinc-400 mt-1">{label}</p>
       </div>
-    );
-  }
+
+      <p className="text-sm text-zinc-400 mt-4 font-bold">
+        {label}
+      </p>
+    </div>
+  );
+}
 
   function NavButton({ id, label }) {
     return (
@@ -2364,11 +2382,15 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
         {esPF && tab === 'pf' && (
         
           <div className="grid grid-cols-1 md:grid-cols-[230px_1fr] gap-5 mt-5">
-            <div className="md:hidden col-span-full">
+           <div className="md:hidden col-span-full mobile-section-title">
+  <p className="text-xs text-zinc-500 font-black uppercase tracking-[0.2em] mb-2">
+    Sección actual
+  </p>
+
   <select
     value={seccionPF}
     onChange={(e) => setSeccionPF(e.target.value)}
-    className="w-full rounded-2xl bg-zinc-900 border border-lime-400/50 text-white px-4 py-4 font-black mb-4"
+    className="w-full rounded-xl bg-zinc-900/60 border border-white/10 px-3 py-3 text-sm text-white font-bold mb-2"
   >
     <option value="dashboard">Dashboard</option>
     <option value="calendario">Calendario</option>
@@ -2397,6 +2419,33 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
 </aside>
 
             <section className="space-y-6">
+              {seccionPF === 'dashboard' && (
+  <div className="premium-card mb-5">
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <p className="text-zinc-500 text-sm font-bold">
+          👋 Bienvenido
+        </p>
+
+        <h1 className="text-3xl font-black text-white">
+          {usuario?.nombre || 'PF'}
+        </h1>
+
+        <p className="text-zinc-400 mt-1">
+          {new Date().toLocaleDateString('es-AR', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+          })}
+        </p>
+      </div>
+
+      <div className="h-16 w-16 rounded-3xl bg-lime-400/20 flex items-center justify-center text-3xl">
+        🏐
+      </div>
+    </div>
+  </div>
+)}
               {seccionPF === 'dashboard' && (
                 <>
                   <div>
@@ -2538,12 +2587,12 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <Stat label="Wellness del día" value={wellnessHoy.length} />
-                    <Stat label="Alertas del día" value={alertasWellness.length} tone="red" />
-                    <Stat label="Presentes del día" value={presentes} />
-                    <Stat label="Adaptados/lesionados" value={adaptados + lesionados} tone="yellow" />
-                  </div>
+<div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  <Stat label="Wellness" value={wellnessHoy.length} icon="🧠" tone="blue" />
+  <Stat label="Alertas" value={alertasWellness.length} icon="⚠️" tone="red" />
+  <Stat label="Presentes" value={presentes} icon="✅" />
+  <Stat label="Adaptados / Lesionados" value={adaptados + lesionados} icon="⚡" tone="yellow" />
+</div>
 
                   <div className="premium-card border border-red-500/20">
   <div className="flex items-center justify-between gap-3">
@@ -2999,7 +3048,7 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
   collisionDetection={closestCenter}
   onDragEnd={handleDragEndCalendario}
 >
-                   <div className="overflow-x-auto mt-5 -mx-4 px-4 md:mx-0 md:px-0">
+                   <div className="hidden md:block overflow-x-auto mt-5 -mx-4 px-4 md:mx-0 md:px-0">
   <div className="min-w-[1000px] md:min-w-[1200px]">
     <div className="grid grid-cols-8 gap-2">
       <div></div>
@@ -3116,6 +3165,112 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
   </div>
 </div>
 </DndContext>
+<div className="md:hidden mt-5 space-y-4">
+  <div className="rounded-3xl bg-zinc-950/80 border border-lime-400/20 p-4">
+    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-black">
+      Vista mobile
+    </p>
+
+    <h3 className="text-2xl font-black text-white mt-1">
+      📅 {filtroSemana}
+    </h3>
+  </div>
+
+  {diasSemana.map((dia) => {
+    const items = planificacion.filter(
+      (p) => p.semana === filtroSemana && p.dia === dia
+    );
+
+    return (
+      <div
+        key={dia}
+        className="rounded-3xl bg-zinc-950/70 border border-white/10 p-4"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-lg font-black text-lime-400">
+            {dia}
+          </h4>
+
+          <span className="text-xs text-zinc-500 font-bold">
+            {items.length} rutina{items.length === 1 ? '' : 's'}
+          </span>
+        </div>
+
+        {items.length === 0 ? (
+          <div className="rounded-2xl bg-zinc-900/70 border border-white/5 p-4 text-zinc-600 text-sm">
+            Sin rutinas planificadas
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {items.map((p) => (
+              <div
+                key={`${p.idPlanificacion || p.id || p.idRutina}-${p.semana}-${p.dia}-${p.nombreRutina}-mobile`}
+                className="rounded-2xl bg-black/40 border border-white/10 p-4"
+              >
+                <p className="font-black text-white">
+                  {p.nombreRutina}
+                </p>
+
+                <p className="text-xs text-zinc-500 mt-1">
+                  {p.categoria}
+                </p>
+
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      abrirRutina({
+                        idRutina: p.idRutina || p.IDRutina || p.rutinaId || p.id,
+                        nombreRutina: p.nombreRutina,
+                        semana: p.semana,
+                        dia: p.dia,
+                      });
+                    }}
+                    className="rounded-xl bg-zinc-800 px-3 py-2 text-xs font-black text-white"
+                  >
+                    Abrir
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRutinaParaPlanificar({
+                        ...p,
+                        idPlanificacion: p.idPlanificacion || p.id,
+                      });
+
+                      setSemanaDestinoPlanificacionRapida(p.semana);
+                      setDiaDestinoPlanificacionRapida(p.dia);
+                    }}
+                    className="rounded-xl bg-lime-400 px-3 py-2 text-xs font-black text-black"
+                  >
+                    Mover
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => duplicarPlanificacion(p)}
+                    className="rounded-xl bg-blue-500/20 px-3 py-2 text-xs font-black text-blue-300"
+                  >
+                    Duplicar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => eliminarPlanificacion(p)}
+                    className="rounded-xl bg-red-500/20 px-3 py-2 text-xs font-black text-red-300"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  })}
+</div>
 {rutinaParaPlanificar && (
   <div className="mt-5 rounded-3xl bg-zinc-950/70 p-5 border border-lime-400/30">
     <h3 className="font-black text-lime-400">Mover rutina</h3>
@@ -4321,6 +4476,29 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
             </section>
           </div>
         )}
+        {esPF && tab === 'pf' && (
+  <nav className="mobile-bottom-nav">
+    <button type="button" onClick={() => setSeccionPF('dashboard')} className={seccionPF === 'dashboard' ? 'mobile-nav-item mobile-nav-active' : 'mobile-nav-item'}>
+      <span>🏠</span><small>Inicio</small>
+    </button>
+
+    <button type="button" onClick={() => setSeccionPF('calendario')} className={seccionPF === 'calendario' ? 'mobile-nav-item mobile-nav-active' : 'mobile-nav-item'}>
+      <span>📅</span><small>Agenda</small>
+    </button>
+
+    <button type="button" onClick={() => setSeccionPF('rutinas')} className={seccionPF === 'rutinas' ? 'mobile-nav-item mobile-nav-active' : 'mobile-nav-item'}>
+      <span>📚</span><small>Rutinas</small>
+    </button>
+
+    <button type="button" onClick={() => setSeccionPF('perfilJugador')} className={seccionPF === 'perfilJugador' ? 'mobile-nav-item mobile-nav-active' : 'mobile-nav-item'}>
+      <span>👤</span><small>Perfil</small>
+    </button>
+
+    <button type="button" onClick={() => setSeccionPF('bancoEjercicios')} className={seccionPF === 'bancoEjercicios' ? 'mobile-nav-item mobile-nav-active' : 'mobile-nav-item'}>
+      <span>🏋️</span><small>Banco</small>
+    </button>
+  </nav>
+)}
 
         {tab === 'jugador' && (
           <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -5051,18 +5229,66 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
                   <button onClick={() => iniciarSesionEntrenamiento(rutinaAbierta)} className="rounded-2xl bg-lime-400 text-black px-4 py-3 font-black">Comenzar entrenamiento</button>
                 </div>
                 <div className="mt-4 space-y-3">
-                  {detalleRutina.map((e) => (
-                    <div key={e.idDetalle} className="exercise-card" style={estiloBloque(e.bloque)}>
-                      <BloqueTag bloque={e.bloque} />
-                      <p className="font-black">{e.orden}. {e.ejercicio}</p>
-                      <p className="text-sm text-zinc-300">
-                        {e.bloque} · {e.series} series · {e.reps} reps
-                      </p>
-                      <p className="text-sm text-zinc-400">
-                        Kg sugerido: {e.kgSugerido || '-'} · RPE {e.rpe || '-'} · Tempo {e.tempo || '-'}
-                      </p>
-                    </div>
-                  ))}
+                  {Object.entries(
+  detalleRutina.reduce((acc, e) => {
+    const bloque = e.bloque || 'Sin bloque';
+
+    if (!acc[bloque]) acc[bloque] = [];
+    acc[bloque].push(e);
+
+    return acc;
+  }, {})
+).map(([bloque, ejerciciosBloque]) => (
+  <div
+    key={bloque}
+    className="rounded-3xl bg-zinc-950/70 border border-white/10 p-4 mb-4"
+  >
+    <div className="rounded-2xl bg-lime-400/10 border border-lime-400/30 px-4 py-3 mb-4">
+  <div className="flex items-center justify-between gap-3">
+    <h4 className="font-black text-lime-400 text-lg">
+      📦 {bloque}
+    </h4>
+
+    <span className="rounded-full bg-lime-400 text-black px-3 py-1 text-xs font-black">
+      {ejerciciosBloque.length}
+    </span>
+  </div>
+
+  <p className="text-xs text-zinc-500 mt-1">
+    ejercicios dentro de este bloque
+  </p>
+</div>
+
+    <div className="space-y-3">
+      {ejerciciosBloque.map((e, index) => (
+        <div
+          key={e.idDetalle || `${bloque}-${index}`}
+          className="rounded-2xl bg-zinc-900/80 p-4 border border-white/5"
+        >
+          <p className="font-black text-white">
+            {e.ejercicio}
+          </p>
+
+          <p className="text-xs text-zinc-400 mt-1">
+            {e.series || '-'} series · {e.reps || '-'} reps · RPE {e.rpe || '-'}
+          </p>
+
+          {e.kgSugerido && (
+            <p className="text-xs text-lime-400 mt-1 font-bold">
+              Kg sugerido: {e.kgSugerido}
+            </p>
+          )}
+
+          {e.observaciones && (
+            <p className="text-xs text-zinc-500 mt-2">
+              {e.observaciones}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  </div>
+))}
                 </div>
               </section>
             )}
