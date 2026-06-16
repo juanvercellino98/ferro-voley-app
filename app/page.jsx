@@ -2362,19 +2362,39 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
         </header>
 
         {esPF && tab === 'pf' && (
+        
           <div className="grid grid-cols-1 md:grid-cols-[230px_1fr] gap-5 mt-5">
-            <aside className="sidebar overflow-x-auto md:overflow-visible">
-              <NavButton id="dashboard" label="Dashboard" />
-              <NavButton id="calendario" label="Calendario" />
-              <NavButton id="rutinas" label="Rutinas" />
-              <NavButton id="grupo" label="Crear grupo" />
-              <NavButton id="jugador" label="Cargar jugador" />
-              <NavButton id="perfilJugador" label="Perfil jugador" />
-              <NavButton id="crearRutina" label="Crear rutina" />
-              <NavButton id="bancoEjercicios" label="Banco ejercicios" />
-              {esAdmin && <NavButton id="usuarios" label="Usuarios" />}
-              {esAdmin && <NavButton id="adminVisual" label="Personalizar app" />}
-            </aside>
+            <div className="md:hidden col-span-full">
+  <select
+    value={seccionPF}
+    onChange={(e) => setSeccionPF(e.target.value)}
+    className="w-full rounded-2xl bg-zinc-900 border border-lime-400/50 text-white px-4 py-4 font-black mb-4"
+  >
+    <option value="dashboard">Dashboard</option>
+    <option value="calendario">Calendario</option>
+    <option value="rutinas">Rutinas</option>
+    <option value="grupo">Crear grupo</option>
+    <option value="jugador">Cargar jugador</option>
+    <option value="perfilJugador">Perfil jugador</option>
+    <option value="crearRutina">Crear rutina</option>
+    <option value="bancoEjercicios">Banco ejercicios</option>
+    {esAdmin && <option value="usuarios">Usuarios</option>}
+    {esAdmin && <option value="adminVisual">Personalizar app</option>}
+  </select>
+</div>
+
+<aside className="hidden md:block sidebar">
+  <NavButton id="dashboard" label="Dashboard" />
+  <NavButton id="calendario" label="Calendario" />
+  <NavButton id="rutinas" label="Rutinas" />
+  <NavButton id="grupo" label="Crear grupo" />
+  <NavButton id="jugador" label="Cargar jugador" />
+  <NavButton id="perfilJugador" label="Perfil jugador" />
+  <NavButton id="crearRutina" label="Crear rutina" />
+  <NavButton id="bancoEjercicios" label="Banco ejercicios" />
+  {esAdmin && <NavButton id="usuarios" label="Usuarios" />}
+  {esAdmin && <NavButton id="adminVisual" label="Personalizar app" />}
+</aside>
 
             <section className="space-y-6">
               {seccionPF === 'dashboard' && (
