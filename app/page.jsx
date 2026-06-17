@@ -195,6 +195,7 @@ const [diaDestinoPlanificacionRapida, setDiaDestinoPlanificacionRapida] = useSta
 const [semanaDestinoPlanificacionRapida, setSemanaDestinoPlanificacionRapida] = useState('Semana 1');
 const [modalGrupo, setModalGrupo] = useState(null);
 const [modalJugador, setModalJugador] = useState(null);
+const [vistaDesktop, setVistaDesktop] = useState(false);
 
   const [grupoSeleccionado, setGrupoSeleccionado] = useState('');
   const [grupoRutina, setGrupoRutina] = useState('');
@@ -2661,6 +2662,13 @@ function Stat({ label, value, tone = 'green', icon = '📊' }) {
             </div>
 
             <div className="flex gap-2">
+              <button
+  type="button"
+  onClick={() => setVistaDesktop(!vistaDesktop)}
+  className="top-tab"
+>
+  {vistaDesktop ? '📱 Celular' : '🖥️ PC'}
+</button>
               {esJugador && (
                 <button
                   onClick={() => setTab('jugador')}
@@ -3383,8 +3391,14 @@ function Stat({ label, value, tone = 'green', icon = '📊' }) {
   collisionDetection={closestCenter}
   onDragEnd={handleDragEndCalendario}
 >
-                   <div className="hidden md:block overflow-x-auto mt-5 -mx-4 px-4 md:mx-0 md:px-0">
-  <div className="min-w-[1000px] md:min-w-[1200px]">
+                   <div className={`${vistaDesktop ? 'block' : 'hidden md:block'} overflow-x-auto mt-5 -mx-4 px-4 md:mx-0 md:px-0`}>
+  <div
+  className={
+    vistaDesktop
+      ? 'min-w-[1400px]'
+      : 'w-full'
+  }
+>
     <div className="grid grid-cols-8 gap-2">
       <div></div>
 
