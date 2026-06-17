@@ -2071,100 +2071,348 @@ const graficoCargaHTML = cargaPorJugadorInforme.slice(0, 10).map((j) => `
 
   ventana.document.close();
 }
-  async function exportarRutinaPDF(rutina) {
-    const res = await fetch(`${API_URL}?action=listarDetalleRutina&idRutina=${rutina.idRutina}`);
-    const data = await res.json();
-    const ejerciciosPDF = data.ok ? data.detalle || [] : [];
+function limpiarTextoPDF(valor) {
+  return String(valor || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
 
-    const htmlEjercicios = ejerciciosPDF.map((e) => {
-      const bloque = e.bloque || 'Bloque';
-      return `
-        <div class="ejercicio">
-          <div class="bloque">${bloque}</div>
-          <h3>${e.orden}. ${e.ejercicio || ''}</h3>
-          <p><strong>Series:</strong> ${e.series || '-'} · <strong>Reps:</strong> ${e.reps || '-'} · <strong>Kg:</strong> ${e.kgSugerido || '-'}</p>
-          <p><strong>RPE:</strong> ${e.rpe || '-'} · <strong>Tempo:</strong> ${e.tempo || '-'}</p>
-          ${e.observaciones ? `<p><strong>Obs:</strong> ${e.observaciones}</p>` : ''}
+function obtenerCodigoBloque(bloque, index) {
+  const texto = String(bloque || '').toLowerCase();
+
+  if (texto.includes('bloque 0')) return `0${index + 1}`;
+  if (texto.includes('bloque a')) return `A${index + 1}`;
+  if (texto.includes('bloque b')) return `B${index + 1}`;
+  if (texto.includes('bloque c')) return `C${index + 1}`;
+  if (texto.includes('bloque d')) return `D${index + 1}`;
+
+  return String(index + 1).padStart(2, '0');
+}
+
+function estilosPDFRutina() {
+  return `
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        color: #1f2933;
+        padding: 42px;
+        background: white;
+      }
+
+      .print-btn {
+        margin-bottom: 22px;
+        padding: 10px 16px;
+        border: 0;
+        border-radius: 8px;
+        background: #335c36;
+        color: white;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      .page {
+        max-width: 980px;
+        margin: 0 auto;
+      }
+
+      .titulo {
+        font-size: 18px;
+        font-weight: 700;
+        color: #295f2e;
+        margin-bottom: 12px;
+      }
+
+      .semana {
+        font-size: 12px;
+        color: #6c806b;
+        margin-bottom: 24px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+
+      th {
+        background: #275f27;
+        color: white;
+        padding: 8px 7px;
+        text-align: left;
+        border: 1px solid #9caf9c;
+        font-weight: 700;
+      }
+
+      td {
+        border: 1px solid #c7cdd1;
+        padding: 6px 7px;
+        vertical-align: top;
+      }
+
+      .dia-row td {
+        background: #e5ece6;
+        color: #20331f;
+        font-weight: 900;
+        text-transform: uppercase;
+        border-top: 2px solid #3c5e34;
+      }
+
+      .bloque-row td {
+        background: #f1f4f1;
+        color: #264628;
+        font-weight: 800;
+        font-style: italic;
+      }
+
+      .codigo {
+        width: 48px;
+        text-align: center;
+        font-weight: 700;
+        color: #395e34;
+      }
+
+      .ejercicio {
+        width: 38%;
+      }
+
+      .series {
+        width: 62px;
+        text-align: center;
+      }
+
+      .reps {
+        width: 90px;
+        text-align: center;
+      }
+
+      .notas {
+        font-size: 10px;
+        color: #374151;
+        font-style: italic;
+      }
+
+      @media print {
+        .print-btn { display: none; }
+
+        body {
+          padding: 22px;
+        }
+
+        table {
+          font-size: 10px;
+        }
+
+        th, td {
+          padding: 5px 6px;
+        }
+
+        .dia-row, .bloque-row, tr {
+          page-break-inside: avoid;
+        }
+      }
+    </style>
+  `;
+}
+
+async function exportarRutinaPDF(rutina) {
+  const ventana = window.open('', '_blank');
+
+  if (!ventana) {
+    alert('El navegador bloqueó la ventana emergente. Permití popups para exportar PDF.');
+    return;
+  }
+
+  ventana.document.write(`
+    <html>
+      <head><title>Generando PDF...</title></head>
+      <body style="font-family: Arial; padding: 40px;">
+        <h2>Generando rutina...</h2>
+      </body>
+    </html>
+  `);
+  ventana.document.close();
+
+  const res = await fetch(`${API_URL}?action=listarDetalleRutina&idRutina=${rutina.idRutina}`);
+  const data = await res.json();
+  const ejerciciosPDF = data.ok ? data.detalle || [] : [];
+
+  const bloques = ejerciciosPDF.reduce((acc, e) => {
+    const bloque = e.bloque || 'Sin bloque';
+    if (!acc[bloque]) acc[bloque] = [];
+    acc[bloque].push(e);
+    return acc;
+  }, {});
+
+  const filas = Object.entries(bloques).map(([bloque, ejercicios]) => `
+    <tr class="bloque-row">
+      <td colspan="5">${limpiarTextoPDF(bloque)}</td>
+    </tr>
+
+    ${ejercicios.map((e, index) => `
+      <tr>
+        <td class="codigo">${obtenerCodigoBloque(bloque, index)}</td>
+        <td class="ejercicio">${limpiarTextoPDF(e.ejercicio)}</td>
+        <td class="series">${limpiarTextoPDF(e.series || '-')}</td>
+        <td class="reps">${limpiarTextoPDF(e.reps || '-')}</td>
+        <td class="notas">${limpiarTextoPDF(e.observaciones || e.tempo || e.kgSugerido || '')}</td>
+      </tr>
+    `).join('')}
+  `).join('');
+
+  ventana.document.open();
+  ventana.document.write(`
+    <html>
+      <head>
+        <title>${limpiarTextoPDF(rutina.nombreRutina || 'Rutina')}</title>
+        ${estilosPDFRutina()}
+      </head>
+
+      <body>
+        <button class="print-btn" onclick="window.print()">Guardar / Imprimir PDF</button>
+
+        <div class="page">
+          <div class="titulo">${limpiarTextoPDF(rutina.nombreRutina || 'Plan de entrenamiento')}</div>
+          <div class="semana">${limpiarTextoPDF(rutina.semana || '')} ${rutina.dia ? `· ${limpiarTextoPDF(rutina.dia)}` : ''}</div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Bloque</th>
+                <th>Ejercicio / Estímulo</th>
+                <th>Series</th>
+                <th>Repeticiones</th>
+                <th>Notas</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="dia-row">
+                <td colspan="5">${limpiarTextoPDF(rutina.dia || '')}: ${limpiarTextoPDF(rutina.objetivo || rutina.nombreRutina || '')}</td>
+              </tr>
+              ${filas || '<tr><td colspan="5">Sin ejercicios cargados.</td></tr>'}
+            </tbody>
+          </table>
         </div>
+      </body>
+    </html>
+  `);
+  ventana.document.close();
+}
+
+async function exportarSemanaPDF() {
+  const ventana = window.open('', '_blank');
+
+  if (!ventana) {
+    alert('El navegador bloqueó la ventana emergente. Permití popups para exportar PDF.');
+    return;
+  }
+
+  ventana.document.write(`
+    <html>
+      <head><title>Generando PDF...</title></head>
+      <body style="font-family: Arial; padding: 40px;">
+        <h2>Generando planificación semanal...</h2>
+      </body>
+    </html>
+  `);
+  ventana.document.close();
+
+  const itemsSemana = planificacion.filter(
+    (p) => String(p.semana) === String(filtroSemana)
+  );
+
+  if (itemsSemana.length === 0) {
+    ventana.close();
+    alert(`No hay rutinas planificadas en ${filtroSemana}`);
+    return;
+  }
+
+  const rutinasConDetalle = [];
+
+  for (const item of itemsSemana) {
+    const res = await fetch(`${API_URL}?action=listarDetalleRutina&idRutina=${item.idRutina}`);
+    const data = await res.json();
+
+    rutinasConDetalle.push({
+      ...item,
+      detalle: data.ok ? data.detalle || [] : [],
+    });
+  }
+
+  const filasSemana = diasSemana.map((dia) => {
+    const rutinasDia = rutinasConDetalle.filter((r) => r.dia === dia);
+
+    if (rutinasDia.length === 0) return '';
+
+    return rutinasDia.map((rutina) => {
+      const bloques = rutina.detalle.reduce((acc, e) => {
+        const bloque = e.bloque || 'Sin bloque';
+        if (!acc[bloque]) acc[bloque] = [];
+        acc[bloque].push(e);
+        return acc;
+      }, {});
+
+      return `
+        <tr class="dia-row">
+          <td colspan="5">${limpiarTextoPDF(dia)}: ${limpiarTextoPDF(rutina.objetivo || rutina.nombreRutina || '')}</td>
+        </tr>
+
+        ${Object.entries(bloques).map(([bloque, ejercicios]) => `
+          <tr class="bloque-row">
+            <td colspan="5">${limpiarTextoPDF(bloque)}</td>
+          </tr>
+
+          ${ejercicios.map((e, index) => `
+            <tr>
+              <td class="codigo">${obtenerCodigoBloque(bloque, index)}</td>
+              <td class="ejercicio">${limpiarTextoPDF(e.ejercicio)}</td>
+              <td class="series">${limpiarTextoPDF(e.series || '-')}</td>
+              <td class="reps">${limpiarTextoPDF(e.reps || '-')}</td>
+              <td class="notas">${limpiarTextoPDF(e.observaciones || e.tempo || e.kgSugerido || '')}</td>
+            </tr>
+          `).join('')}
+        `).join('')}
       `;
     }).join('');
+  }).join('');
 
-    const ventana = window.open('', '_blank');
+  ventana.document.open();
+  ventana.document.write(`
+    <html>
+      <head>
+        <title>Plan pesas - ${limpiarTextoPDF(filtroSemana)}</title>
+        ${estilosPDFRutina()}
+      </head>
 
-    ventana.document.write(`
-      <html>
-        <head>
-          <title>${rutina.nombreRutina}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 32px; color: #111; }
-            .header { border-bottom: 3px solid #111; padding-bottom: 16px; margin-bottom: 24px; }
-            h1 { margin: 0; font-size: 28px; }
-            .meta { color: #555; margin-top: 8px; }
-            .ejercicio { border-left: 8px solid #84cc16; background: #f4f4f5; padding: 16px; margin-bottom: 14px; border-radius: 12px; page-break-inside: avoid; }
-            .bloque { display: inline-block; background: #111; color: white; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: bold; margin-bottom: 8px; }
-            h3 { margin: 6px 0 8px; }
-            p { margin: 5px 0; }
-            .chart-box {
-  margin-top: 14px;
-  background: #f4f4f5;
-  border: 1px solid #ddd;
-  border-radius: 16px;
-  padding: 16px;
+      <body>
+        <button class="print-btn" onclick="window.print()">Guardar / Imprimir PDF</button>
+
+        <div class="page">
+          <div class="titulo">Plan pesas DH 2026</div>
+          <div class="semana">${limpiarTextoPDF(filtroSemana)}</div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Bloque</th>
+                <th>Ejercicio / Estímulo</th>
+                <th>Series</th>
+                <th>Repeticiones</th>
+                <th>Notas</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filasSemana || '<tr><td colspan="5">Sin rutinas planificadas.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </body>
+    </html>
+  `);
+  ventana.document.close();
 }
-
-.bar-row {
-  display: grid;
-  grid-template-columns: 140px 1fr 70px;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.bar-label {
-  font-weight: bold;
-  font-size: 13px;
-}
-
-.bar-track {
-  height: 14px;
-  background: #e4e4e7;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.bar-fill {
-  height: 100%;
-  background: #84cc16;
-  border-radius: 999px;
-}
-
-.bar-fill.dark {
-  background: #111;
-}
-
-.bar-value {
-  font-weight: bold;
-  font-size: 12px;
-  text-align: right;
-}
-            .footer { margin-top: 30px; color: #666; font-size: 12px; }
-            @media print { button { display:none; } }
-          </style>
-        </head>
-        <body>
-          <button onclick="window.print()" style="padding:12px 18px; border-radius:10px; border:0; background:#84cc16; font-weight:bold; margin-bottom:20px; cursor:pointer;">Guardar / Imprimir PDF</button>
-          <div class="header">
-            <h1>${rutina.nombreRutina}</h1>
-            <div class="meta">Semana ${rutina.semana || '-'} · ${rutina.dia || '-'} · ${rutina.rama || ''} ${rutina.categoria || ''}</div>
-          </div>
-          ${htmlEjercicios}
-          <div class="footer">Ferro Vóley · Preparación Física</div>
-        </body>
-      </html>
-    `);
-
-    ventana.document.close();
-  }
 
   function Slider({ label, value, setValue }) {
     return (
@@ -3043,7 +3291,23 @@ function Stat({ label, value, tone = 'green', icon = '📊' }) {
                         </button>
                       </div>
                     </div>
+<div className="mt-5 rounded-3xl bg-zinc-950/60 p-4 border border-lime-400/20">
+  <h4 className="font-black text-lg text-lime-400">
+    📅 Exportar semana completa
+  </h4>
 
+  <p className="text-sm text-zinc-400 mt-1">
+    Genera un PDF imprimible con todas las rutinas planificadas en {filtroSemana}.
+  </p>
+
+  <button
+    type="button"
+    onClick={exportarSemanaPDF}
+    className="btn-green mt-4"
+  >
+    Exportar semana en PDF
+  </button>
+</div>
                    <DndContext
   collisionDetection={closestCenter}
   onDragEnd={handleDragEndCalendario}
@@ -3812,107 +4076,162 @@ function Stat({ label, value, tone = 'green', icon = '📊' }) {
     items={ejerciciosEditando.map((_, index) => String(index))}
     strategy={verticalListSortingStrategy}
   >
-    {ejerciciosEditando.map((ejercicio, index) => (
-      <EjercicioSortable key={index} id={String(index)}>
-                          <div className="rounded-3xl bg-zinc-950/60 p-4 border border-white/5">
-                            <div className="flex items-center justify-between gap-3 mb-3">
-  <p className="font-black text-lime-400">
-    Ejercicio {index + 1}
-  </p>
+{Object.entries(
+  ejerciciosEditando.reduce((acc, ejercicio, index) => {
+    const bloque = ejercicio.bloque || 'Sin bloque';
+    if (!acc[bloque]) acc[bloque] = [];
+    acc[bloque].push({ ...ejercicio, indexOriginal: index });
+    return acc;
+  }, {})
+).map(([bloque, ejerciciosBloque]) => (
+  <div
+    key={bloque}
+    className="rounded-3xl bg-zinc-950/70 border border-lime-400/20 p-4 mb-5"
+  >
+    <div className="rounded-2xl bg-lime-400/10 border border-lime-400/30 px-4 py-3 mb-4">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="font-black text-lime-400 text-lg">
+          📦 {bloque}
+        </h4>
 
-  <div className="flex gap-2">
-    <button
-      type="button"
-      onClick={() => moverEjercicioArriba(index)}
-      className="rounded-xl bg-zinc-800 px-3 py-2 text-sm font-black"
-    >
-      ↑
-    </button>
+        <span className="rounded-full bg-lime-400 text-black px-3 py-1 text-xs font-black">
+          {ejerciciosBloque.length}
+        </span>
+      </div>
 
-    <button
-      type="button"
-      onClick={() => moverEjercicioAbajo(index)}
-      className="rounded-xl bg-zinc-800 px-3 py-2 text-sm font-black"
-    >
-      ↓
-    </button>
+      <p className="text-xs text-zinc-500 mt-1">
+        ejercicios dentro de este bloque
+      </p>
+    </div>
 
-    <button
-      onClick={() => eliminarEjercicioEditando(index)}
-      className="rounded-xl bg-red-500/20 text-red-300 px-3 py-2 text-sm font-black"
-    >
-      Eliminar
-    </button>
-  </div>
-</div>
+    <div className="space-y-3">
+      {ejerciciosBloque.map((ejercicio) => {
+        const index = ejercicio.indexOriginal;
 
-                            <div className="grid md:grid-cols-2 gap-3">
-                              <input
-                                value={ejercicio.bloque}
-                                onChange={(e) => actualizarEjercicioEditando(index, 'bloque', e.target.value)}
-                                placeholder="Bloque"
-                                className="input-dark"
-                              />
+        return (
+          <EjercicioSortable key={index} id={String(index)}>
+            <div className="rounded-3xl bg-zinc-950/60 p-4 border border-white/5">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <p className="font-black text-lime-400">
+                  Ejercicio {index + 1}
+                </p>
 
-                              <input
-                                value={ejercicio.nombre}
-                                onChange={(e) => actualizarEjercicioEditando(index, 'nombre', e.target.value)}
-                                placeholder="Ejercicio"
-                                className="input-dark"
-                              />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => moverEjercicioArriba(index)}
+                    className="rounded-xl bg-zinc-800 px-3 py-2 text-sm font-black"
+                  >
+                    ↑
+                  </button>
 
-                              <input
-                                value={ejercicio.series}
-                                onChange={(e) => actualizarEjercicioEditando(index, 'series', e.target.value)}
-                                placeholder="Series"
-                                className="input-dark"
-                              />
+                  <button
+                    type="button"
+                    onClick={() => moverEjercicioAbajo(index)}
+                    className="rounded-xl bg-zinc-800 px-3 py-2 text-sm font-black"
+                  >
+                    ↓
+                  </button>
 
-                              <input
-                                value={ejercicio.reps}
-                                onChange={(e) => actualizarEjercicioEditando(index, 'reps', e.target.value)}
-                                placeholder="Reps"
-                                className="input-dark"
-                              />
+                  <button
+                    type="button"
+                    onClick={() => eliminarEjercicioEditando(index)}
+                    className="rounded-xl bg-red-500/20 text-red-300 px-3 py-2 text-sm font-black"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
 
-                              <input
-                                value={ejercicio.kgSugerido}
-                                onChange={(e) => actualizarEjercicioEditando(index, 'kgSugerido', e.target.value)}
-                                placeholder="Kg sugerido"
-                                className="input-dark"
-                              />
+              <div className="grid md:grid-cols-2 gap-3">
+                <input
+                  value={ejercicio.bloque}
+                  onChange={(e) =>
+                    actualizarEjercicioEditando(index, 'bloque', e.target.value)
+                  }
+                  placeholder="Bloque"
+                  className="input-dark"
+                />
 
-                              <input
-                                value={ejercicio.rpe}
-                                onChange={(e) => actualizarEjercicioEditando(index, 'rpe', e.target.value)}
-                                placeholder="RPE"
-                                className="input-dark"
-                              />
+                <input
+                  value={ejercicio.nombre}
+                  onChange={(e) =>
+                    actualizarEjercicioEditando(index, 'nombre', e.target.value)
+                  }
+                  placeholder="Ejercicio"
+                  className="input-dark"
+                />
 
-                              <input
-                                value={ejercicio.tempo}
-                                onChange={(e) => actualizarEjercicioEditando(index, 'tempo', e.target.value)}
-                                placeholder="Tempo"
-                                className="input-dark"
-                              />
+                <input
+                  value={ejercicio.series}
+                  onChange={(e) =>
+                    actualizarEjercicioEditando(index, 'series', e.target.value)
+                  }
+                  placeholder="Series"
+                  className="input-dark"
+                />
 
-                              <input
-                                value={ejercicio.videoUrl}
-                                onChange={(e) => actualizarEjercicioEditando(index, 'videoUrl', e.target.value)}
-                                placeholder="Link de video"
-                                className="input-dark"
-                              />
+                <input
+                  value={ejercicio.reps}
+                  onChange={(e) =>
+                    actualizarEjercicioEditando(index, 'reps', e.target.value)
+                  }
+                  placeholder="Reps"
+                  className="input-dark"
+                />
 
-                              <textarea
-                                value={ejercicio.observaciones}
-                                onChange={(e) => actualizarEjercicioEditando(index, 'observaciones', e.target.value)}
-                                placeholder="Observaciones"
-                                className="input-dark min-h-24 md:col-span-2"
-                              />
-                            </div>
-                          </div>
+                <input
+                  value={ejercicio.kgSugerido}
+                  onChange={(e) =>
+                    actualizarEjercicioEditando(index, 'kgSugerido', e.target.value)
+                  }
+                  placeholder="Kg sugerido"
+                  className="input-dark"
+                />
+
+                <input
+                  value={ejercicio.rpe}
+                  onChange={(e) =>
+                    actualizarEjercicioEditando(index, 'rpe', e.target.value)
+                  }
+                  placeholder="RPE"
+                  className="input-dark"
+                />
+
+                <input
+                  value={ejercicio.tempo}
+                  onChange={(e) =>
+                    actualizarEjercicioEditando(index, 'tempo', e.target.value)
+                  }
+                  placeholder="Tempo"
+                  className="input-dark"
+                />
+
+                <input
+                  value={ejercicio.videoUrl}
+                  onChange={(e) =>
+                    actualizarEjercicioEditando(index, 'videoUrl', e.target.value)
+                  }
+                  placeholder="Link de video"
+                  className="input-dark"
+                />
+
+                <textarea
+                  value={ejercicio.observaciones}
+                  onChange={(e) =>
+                    actualizarEjercicioEditando(index, 'observaciones', e.target.value)
+                  }
+                  placeholder="Observaciones"
+                  className="input-dark min-h-24 md:col-span-2"
+                />
+              </div>
+            </div>
           </EjercicioSortable>
-      ))}
+        );
+      })}
+    </div>
+  </div>
+))}
   </SortableContext>
 </DndContext>
 
@@ -4462,12 +4781,34 @@ function Stat({ label, value, tone = 'green', icon = '📊' }) {
                   {ejercicios.length > 0 && (
                     <div className="mt-5 space-y-3">
                       <h3 className="font-black">Ejercicios agregados</h3>
-                      {ejercicios.map((e, index) => (
-                        <div key={index} className="exercise-card">
-                          <p className="font-black text-lime-400">{index + 1}. {e.nombre}</p>
-                          <p className="text-zinc-300 text-sm">{e.bloque} · {e.series} series · {e.reps} reps</p>
-                        </div>
-                      ))}
+                      {Object.entries(
+  ejercicios.reduce((acc, e, index) => {
+    const bloque = e.bloque || 'Sin bloque';
+    if (!acc[bloque]) acc[bloque] = [];
+    acc[bloque].push({ ...e, indexOriginal: index });
+    return acc;
+  }, {})
+).map(([bloque, ejerciciosBloque]) => (
+  <div key={bloque} className="rounded-3xl bg-zinc-950/70 border border-lime-400/20 p-4 mb-4">
+    <div className="rounded-2xl bg-lime-400/10 border border-lime-400/30 px-4 py-3 mb-4">
+      <h4 className="font-black text-lime-400 text-lg">📦 {bloque}</h4>
+      <p className="text-xs text-zinc-500 mt-1">{ejerciciosBloque.length} ejercicios</p>
+    </div>
+
+    <div className="space-y-3">
+      {ejerciciosBloque.map((e) => (
+        <div key={e.indexOriginal} className="exercise-card">
+          <p className="font-black text-lime-400">
+            {e.indexOriginal + 1}. {e.nombre}
+          </p>
+          <p className="text-zinc-300 text-sm">
+            {e.bloque} · {e.series} series · {e.reps} reps
+          </p>
+        </div>
+      ))}
+    </div>
+  </div>
+))}
                       <button onClick={saveRoutine} className="btn-green">Guardar rutina completa</button>
                     </div>
                   )}
@@ -4959,33 +5300,36 @@ function Stat({ label, value, tone = 'green', icon = '📊' }) {
                         </button>
                         {String(planificacionAbiertaId) === String(p.id) && (
   <div className="mt-4 space-y-3">
-    {detalleRutina.map((e, index) => (
-      <div
-        key={e.idDetalle || index}
-        className="exercise-card"
-        style={estiloBloque(e.bloque)}
-      >
-        <BloqueTag bloque={e.bloque} />
+    {Object.entries(
+  detalleRutina.reduce((acc, e) => {
+    const bloque = e.bloque || 'Sin bloque';
+    if (!acc[bloque]) acc[bloque] = [];
+    acc[bloque].push(e);
+    return acc;
+  }, {})
+).map(([bloque, ejerciciosBloque]) => (
+  <div key={bloque} className="rounded-3xl bg-zinc-950/70 border border-lime-400/20 p-4 mb-4">
+    <div className="rounded-2xl bg-lime-400/10 border border-lime-400/30 px-4 py-3 mb-4">
+      <h4 className="font-black text-lime-400 text-lg">📦 {bloque}</h4>
+      <p className="text-xs text-zinc-500 mt-1">{ejerciciosBloque.length} ejercicios</p>
+    </div>
 
-        <h3 className="text-lg font-black">
-          {index + 1}. {e.ejercicio}
-        </h3>
+    <div className="space-y-3">
+      {ejerciciosBloque.map((e, index) => (
+        <div key={e.idDetalle || `${bloque}-${index}`} className="exercise-card" style={estiloBloque(e.bloque)}>
+          <h3 className="text-lg font-black">{index + 1}. {e.ejercicio}</h3>
+          <p className="text-zinc-300">{e.series} series · {e.reps} reps</p>
 
-        <p className="text-zinc-300">
-          {e.bloque} · {e.series} series · {e.reps} reps
-        </p>
-
-        {e.videoUrl && (
-          <div className="mt-3 overflow-hidden rounded-2xl">
-            <iframe
-              src={convertirYoutubeEmbed(e.videoUrl)}
-              className="w-full aspect-video"
-              allowFullScreen
-            />
-          </div>
-        )}
-      </div>
-    ))}
+          {e.videoUrl && (
+            <div className="mt-3 overflow-hidden rounded-2xl">
+              <iframe src={convertirYoutubeEmbed(e.videoUrl)} className="w-full aspect-video" allowFullScreen />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  </div>
+))}
   </div>
 )}
                       </div>
