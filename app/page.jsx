@@ -29,7 +29,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbzc3cFR5-R5LEIrJbsZml5tnZFOvdMN0cwRkcOEHytMERbB9oWbG08ocYbRdKsVzTK4-w/exec';
+  'https://script.google.com/macros/s/AKfycbywVAPapG_sDx-Z4wKCQpUEWSxBkfcX0s6FIFWD-vLHPuO5nYGakLUIMKgYd8IX8ZkaJw/exec';
 
   function EjercicioSortable({ id, children }) {
   const {
@@ -193,6 +193,8 @@ const [copiarRutinaDia, setCopiarRutinaDia] = useState('Lunes');
 const [rutinaParaPlanificar, setRutinaParaPlanificar] = useState(null);
 const [diaDestinoPlanificacionRapida, setDiaDestinoPlanificacionRapida] = useState('Lunes');
 const [semanaDestinoPlanificacionRapida, setSemanaDestinoPlanificacionRapida] = useState('Semana 1');
+const [modalGrupo, setModalGrupo] = useState(null);
+const [modalJugador, setModalJugador] = useState(null);
 
   const [grupoSeleccionado, setGrupoSeleccionado] = useState('');
   const [grupoRutina, setGrupoRutina] = useState('');
@@ -757,6 +759,75 @@ async function handleDragEndCalendario(event) {
     setTimeout(cargarRutinas, 1000);
   }
 
+  async function eliminarGrupo(grupo) {
+  const confirmar = confirm(
+    `¿Eliminar ${grupo.rama} - ${grupo.tira} - ${grupo.categoria}?`
+  );
+
+  if (!confirmar) return;
+
+  await enviar({
+    action: 'borrarGrupo',
+    id: grupo.id,
+  });
+
+  alert('Grupo eliminado');
+  setTimeout(cargarGrupos, 1000);
+}
+
+async function eliminarJugador(jugador) {
+  const confirmar = confirm(
+    `¿Eliminar ${jugador.nombre} ${jugador.apellido}?`
+  );
+
+  if (!confirmar) return;
+
+  await enviar({
+    action: 'borrarJugador',
+    id: jugador.id,
+  });
+
+  alert('Jugador eliminado');
+  setTimeout(cargarJugadores, 1000);
+}
+
+async function guardarGrupoModal() {
+  if (!modalGrupo) return;
+
+  await enviar({
+    action: 'editarGrupo',
+    id: modalGrupo.id,
+    rama: modalGrupo.rama,
+    tira: modalGrupo.tira,
+    categoria: modalGrupo.categoria,
+    pf: modalGrupo.pf,
+    estado: modalGrupo.estado || 'ACTIVO',
+  });
+
+  alert('Grupo actualizado');
+  setModalGrupo(null);
+  setTimeout(cargarGrupos, 1000);
+}
+
+async function guardarJugadorModal() {
+  if (!modalJugador) return;
+
+  await enviar({
+    action: 'editarJugador',
+    id: modalJugador.id,
+    nombre: modalJugador.nombre,
+    apellido: modalJugador.apellido,
+    posicion: modalJugador.posicion,
+    rama: modalJugador.rama,
+    tira: modalJugador.tira,
+    categoria: modalJugador.categoria,
+    estado: modalJugador.estado || 'ACTIVO',
+  });
+
+  alert('Jugador actualizado');
+  setModalJugador(null);
+  setTimeout(cargarJugadores, 1000);
+}
   async function borrarRutina(rutina) {
   if (!rutina) return;
 
@@ -4271,38 +4342,195 @@ function Stat({ label, value, tone = 'green', icon = '📊' }) {
                 </>
               )}
 
-              {seccionPF === 'grupo' && (
-                <FormCard title="Crear grupo">
-                  <form onSubmit={addGroup} className="space-y-3">
-                    <input name="rama" placeholder="Rama" className="input" required />
-                    <input name="tira" placeholder="Tira" className="input" required />
-                    <input name="categoria" placeholder="Categoría" className="input" required />
-                    <input name="pf" placeholder="PF Responsable" className="input" required />
-                    <button className="btn-green">+ Crear grupo</button>
-                  </form>
-                </FormCard>
-              )}
+             {seccionPF === 'grupo' && (
+  <div className="space-y-5">
+    <FormCard title="Crear grupo">
+      <form onSubmit={addGroup} className="space-y-3">
+        <input name="rama" placeholder="Rama" className="input" required />
+        <input name="tira" placeholder="Tira" className="input" required />
+        <input name="categoria" placeholder="Categoría" className="input" required />
+        <input name="pf" placeholder="PF Responsable" className="input" required />
+        <button className="btn-green">+ Crear grupo</button>
+      </form>
+    </FormCard>
+
+    <FormCard title="Grupos cargados">
+      <div className="grid md:grid-cols-2 gap-3">
+        {grupos.map((grupo) => (
+          <div key={grupo.id} className="rounded-2xl bg-zinc-950/70 border border-white/5 p-4">
+            <p className="font-black text-lime-400">
+              {grupo.rama} · {grupo.tira} · {grupo.categoria}
+            </p>
+
+            <p className="text-sm text-zinc-400 mt-1">
+              PF: {grupo.pf || '-'} · Estado: {grupo.estado || '-'}
+            </p>
+
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setModalGrupo(grupo)}
+                className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-bold"
+              >
+                Editar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => eliminarGrupo(grupo)}
+                className="rounded-lg bg-red-600 px-3 py-1 text-xs font-bold"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </FormCard>
+  </div>
+)}
 
               {seccionPF === 'jugador' && (
-                <FormCard title="Cargar jugador/a">
-                  <form onSubmit={addPlayer} className="space-y-3">
-                    <input name="nombre" placeholder="Nombre" className="input" required />
-                    <input name="apellido" placeholder="Apellido" className="input" required />
-                    <input name="posicion" placeholder="Posición" className="input" />
-                    <select value={grupoSeleccionado} onChange={(e) => setGrupoSeleccionado(e.target.value)} className="input" required>
-                      <option value="">Elegir grupo</option>
-                      {grupos.map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.rama} · {g.tira} · {g.categoria}
-                        </option>
-                      ))}
-                    </select>
-                    <button className="btn-white">+ Cargar jugador/a</button>
-                  </form>
-                </FormCard>
-              )}
+  <div className="space-y-5">
+    <FormCard title="Cargar jugador/a">
+      <form onSubmit={addPlayer} className="space-y-3">
+        <input name="nombre" placeholder="Nombre" className="input" required />
+        <input name="apellido" placeholder="Apellido" className="input" required />
+        <input name="posicion" placeholder="Posición" className="input" />
 
+        <select
+          value={grupoSeleccionado}
+          onChange={(e) => setGrupoSeleccionado(e.target.value)}
+          className="input"
+          required
+        >
+          <option value="">Elegir grupo</option>
+          {grupos.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.rama} · {g.tira} · {g.categoria}
+            </option>
+          ))}
+        </select>
 
+        <button className="btn-white">+ Cargar jugador/a</button>
+      </form>
+    </FormCard>
+
+    <FormCard title="Jugadores cargados">
+      <div className="grid md:grid-cols-2 gap-3">
+        {jugadores.map((jugador) => (
+          <div key={jugador.id} className="rounded-2xl bg-zinc-950/70 border border-white/5 p-4">
+            <p className="font-black text-lime-400">
+              {jugador.nombre} {jugador.apellido}
+            </p>
+
+            <p className="text-sm text-zinc-400 mt-1">
+              {jugador.posicion || '-'} · {jugador.rama} · {jugador.tira} · {jugador.categoria}
+            </p>
+
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setModalJugador(jugador)}
+                className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-bold"
+              >
+                Editar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => eliminarJugador(jugador)}
+                className="rounded-lg bg-red-600 px-3 py-1 text-xs font-bold"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </FormCard>
+  </div>
+)}
+
+{modalGrupo && (
+  <ModalEdicion
+    title="Editar grupo"
+    onClose={() => setModalGrupo(null)}
+    onSave={guardarGrupoModal}
+  >
+    <input
+      value={modalGrupo.rama || ''}
+      onChange={(e) => setModalGrupo({ ...modalGrupo, rama: e.target.value })}
+      placeholder="Rama"
+      className="input"
+    />
+
+    <input
+      value={modalGrupo.tira || ''}
+      onChange={(e) => setModalGrupo({ ...modalGrupo, tira: e.target.value })}
+      placeholder="Tira"
+      className="input"
+    />
+
+    <input
+      value={modalGrupo.categoria || ''}
+      onChange={(e) => setModalGrupo({ ...modalGrupo, categoria: e.target.value })}
+      placeholder="Categoría"
+      className="input"
+    />
+
+    <input
+      value={modalGrupo.pf || ''}
+      onChange={(e) => setModalGrupo({ ...modalGrupo, pf: e.target.value })}
+      placeholder="PF responsable"
+      className="input"
+    />
+  </ModalEdicion>
+)}
+
+{modalJugador && (
+  <ModalEdicion
+    title="Editar jugador"
+    onClose={() => setModalJugador(null)}
+    onSave={guardarJugadorModal}
+  >
+    <input
+      value={modalJugador.nombre || ''}
+      onChange={(e) => setModalJugador({ ...modalJugador, nombre: e.target.value })}
+      placeholder="Nombre"
+      className="input"
+    />
+
+    <input
+      value={modalJugador.apellido || ''}
+      onChange={(e) => setModalJugador({ ...modalJugador, apellido: e.target.value })}
+      placeholder="Apellido"
+      className="input"
+    />
+
+    <input
+      value={modalJugador.posicion || ''}
+      onChange={(e) => setModalJugador({ ...modalJugador, posicion: e.target.value })}
+      placeholder="Posición"
+      className="input"
+    />
+
+    <select
+      value={`${modalJugador.rama}|||${modalJugador.tira}|||${modalJugador.categoria}`}
+      onChange={(e) => {
+        const [rama, tira, categoria] = e.target.value.split('|||');
+        setModalJugador({ ...modalJugador, rama, tira, categoria });
+      }}
+      className="input"
+    >
+      {grupos.map((g) => (
+        <option key={g.id} value={`${g.rama}|||${g.tira}|||${g.categoria}`}>
+          {g.rama} · {g.tira} · {g.categoria}
+        </option>
+      ))}
+    </select>
+  </ModalEdicion>
+)}
               {seccionPF === 'perfilJugador' && (
                 <FormCard title="Perfil físico del jugador">
                   <div className="grid md:grid-cols-2 gap-3">
@@ -5826,6 +6054,45 @@ function Stat({ label, value, tone = 'green', icon = '📊' }) {
   );
 }
 
+function ModalEdicion({ title, children, onClose, onSave }) {
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-4">
+      <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-zinc-950 p-5 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-black text-white">{title}</h2>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-white/10 px-3 py-1 text-sm font-black text-white"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="space-y-3">{children}</div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl bg-zinc-800 px-4 py-2 text-sm font-bold text-white"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            onClick={onSave}
+            className="rounded-xl bg-lime-400 px-4 py-2 text-sm font-black text-zinc-950"
+          >
+            Guardar cambios
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function FormCard({ title, children }) {
   return (
     <div className="premium-card">
