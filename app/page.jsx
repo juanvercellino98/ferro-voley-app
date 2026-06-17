@@ -2662,13 +2662,7 @@ function Stat({ label, value, tone = 'green', icon = '📊' }) {
             </div>
 
             <div className="flex gap-2">
-              <button
-  type="button"
-  onClick={() => setVistaDesktop(!vistaDesktop)}
-  className="top-tab"
->
-  {vistaDesktop ? '📱 Celular' : '🖥️ PC'}
-</button>
+              
               {esJugador && (
                 <button
                   onClick={() => setTab('jugador')}
